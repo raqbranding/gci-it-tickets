@@ -66,13 +66,10 @@ type ImagenPendiente = {
 export default function TicketPage() {
   const router = useRouter();
   const params = useParams();
-
   const ticketId = String(params.id);
 
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [enviandoSeguimiento, setEnviandoSeguimiento] =
-    useState(false);
 
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -80,39 +77,36 @@ export default function TicketPage() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
 
-  // Datos de contacto
+  // CONTACTO
   const [nombre, setNombre] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
 
-  // Cambios ADMIN
+  // ADMIN
   const [estadoEditado, setEstadoEditado] =
     useState<Estado>("PENDIENTE");
 
   const [importanciaEditada, setImportanciaEditada] =
     useState<Importancia>("BAJA");
 
-  // Seguimientos
-  const [seguimientos, setSeguimientos] = useState<Seguimiento[]>(
-    []
-  );
+  // SEGUIMIENTO
+  const [seguimientos, setSeguimientos] =
+    useState<Seguimiento[]>([]);
 
-  const [archivos, setArchivos] = useState<
-    ArchivoSeguimiento[]
-  >([]);
+  const [archivos, setArchivos] =
+    useState<ArchivoSeguimiento[]>([]);
 
-  const [nuevoSeguimiento, setNuevoSeguimiento] = useState("");
+  const [nuevoSeguimiento, setNuevoSeguimiento] =
+    useState("");
 
-  const [imagenesPendientes, setImagenesPendientes] = useState<
-    ImagenPendiente[]
-  >([]);
+  const [imagenesPendientes, setImagenesPendientes] =
+    useState<ImagenPendiente[]>([]);
 
-  const [imagenAmpliada, setImagenAmpliada] = useState<
-    string | null
-  >(null);
+  const [imagenAmpliada, setImagenAmpliada] =
+    useState<string | null>(null);
 
-  // Tags
+  // TAGS
   const [tags, setTags] = useState<Tag[]>([]);
 
   const [tagsTicketOriginales, setTagsTicketOriginales] =
@@ -120,13 +114,16 @@ export default function TicketPage() {
 
   const [tagsTicket, setTagsTicket] = useState<Tag[]>([]);
 
-  const [nuevoTagNombre, setNuevoTagNombre] = useState("");
+  const [nuevoTagNombre, setNuevoTagNombre] =
+    useState("");
+
   const [nuevoTagColor, setNuevoTagColor] =
     useState("#00AF9A");
 
-  // Mensajes
+  // MENSAJES
   const [error, setError] = useState("");
-  const [mensajeGuardado, setMensajeGuardado] = useState("");
+  const [mensajeGuardado, setMensajeGuardado] =
+    useState("");
 
   /* =========================================================
      CARGA
@@ -137,14 +134,6 @@ export default function TicketPage() {
       cargarPagina();
     }
   }, [ticketId]);
-
-  useEffect(() => {
-    return () => {
-      imagenesPendientes.forEach((imagen) => {
-        URL.revokeObjectURL(imagen.preview);
-      });
-    };
-  }, [imagenesPendientes]);
 
   async function cargarPagina() {
     setLoading(true);
@@ -160,11 +149,12 @@ export default function TicketPage() {
       return;
     }
 
-    const { data: acceso, error: accesoError } = await supabase
-      .from("it_usuarios")
-      .select("rol, activo")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const { data: acceso, error: accesoError } =
+      await supabase
+        .from("it_usuarios")
+        .select("rol, activo")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
     if (accesoError || !acceso || !acceso.activo) {
       await supabase.auth.signOut();
@@ -233,19 +223,20 @@ export default function TicketPage() {
   ========================================================= */
 
   async function cargarSeguimientos() {
-    const { data, error: seguimientoError } = await supabase
-      .from("it_seguimientos")
-      .select(`
-        id,
-        ticket_id,
-        creado_por,
-        mensaje,
-        creado_en
-      `)
-      .eq("ticket_id", ticketId)
-      .order("creado_en", {
-        ascending: true,
-      });
+    const { data, error: seguimientoError } =
+      await supabase
+        .from("it_seguimientos")
+        .select(`
+          id,
+          ticket_id,
+          creado_por,
+          mensaje,
+          creado_en
+        `)
+        .eq("ticket_id", ticketId)
+        .order("creado_en", {
+          ascending: true,
+        });
 
     if (seguimientoError) {
       console.error(seguimientoError);
@@ -258,36 +249,42 @@ export default function TicketPage() {
   }
 
   async function cargarArchivosSeguimiento() {
-    const { data, error: archivosError } = await supabase
-      .from("it_seguimiento_archivos")
-      .select(`
-        id,
-        seguimiento_id,
-        ticket_id,
-        nombre_archivo,
-        ruta_storage,
-        tipo_mime,
-        tamano,
-        creado_por,
-        creado_en
-      `)
-      .eq("ticket_id", ticketId)
-      .order("creado_en", {
-        ascending: true,
-      });
+    const { data, error: archivosError } =
+      await supabase
+        .from("it_seguimiento_archivos")
+        .select(`
+          id,
+          seguimiento_id,
+          ticket_id,
+          nombre_archivo,
+          ruta_storage,
+          tipo_mime,
+          tamano,
+          creado_por,
+          creado_en
+        `)
+        .eq("ticket_id", ticketId)
+        .order("creado_en", {
+          ascending: true,
+        });
 
     if (archivosError) {
       console.error(archivosError);
       return;
     }
 
-    const lista = (data ?? []) as ArchivoSeguimiento[];
+    const lista =
+      (data ?? []) as ArchivoSeguimiento[];
 
     const listaConUrls = await Promise.all(
       lista.map(async (archivo) => {
-        const { data: signedData } = await supabase.storage
-          .from("it-tickets")
-          .createSignedUrl(archivo.ruta_storage, 60 * 60);
+        const { data: signedData } =
+          await supabase.storage
+            .from("it-tickets")
+            .createSignedUrl(
+              archivo.ruta_storage,
+              60 * 60
+            );
 
         return {
           ...archivo,
@@ -304,24 +301,28 @@ export default function TicketPage() {
   ========================================================= */
 
   async function cargarTags(rolUsuario: Rol) {
-    const { data: relaciones, error: relacionesError } =
-      await supabase
-        .from("it_ticket_tags")
-        .select(`
-          tag_id,
-          it_tags (
-            id,
-            nombre,
-            color
-          )
-        `)
-        .eq("ticket_id", ticketId);
+    const {
+      data: relaciones,
+      error: relacionesError,
+    } = await supabase
+      .from("it_ticket_tags")
+      .select(`
+        tag_id,
+        it_tags (
+          id,
+          nombre,
+          color
+        )
+      `)
+      .eq("ticket_id", ticketId);
 
     if (!relacionesError && relaciones) {
       const asignados: Tag[] = [];
 
       relaciones.forEach((relacion: any) => {
-        const tagData = Array.isArray(relacion.it_tags)
+        const tagData = Array.isArray(
+          relacion.it_tags
+        )
           ? relacion.it_tags[0]
           : relacion.it_tags;
 
@@ -355,7 +356,7 @@ export default function TicketPage() {
   }
 
   /* =========================================================
-     CAMBIOS PENDIENTES
+     DETECTAR CAMBIOS
   ========================================================= */
 
   const hayCambiosUsuario = useMemo(() => {
@@ -367,17 +368,23 @@ export default function TicketPage() {
       email.trim() !== (ticket.email ?? "") ||
       telefono.trim() !== (ticket.telefono ?? "")
     );
-  }, [ticket, nombre, empresa, email, telefono]);
+  }, [
+    ticket,
+    nombre,
+    empresa,
+    email,
+    telefono,
+  ]);
 
   const hayCambiosAdmin = useMemo(() => {
     if (!ticket) return false;
 
-    const originales = [...tagsTicketOriginales]
+    const originales = tagsTicketOriginales
       .map((tag) => tag.id)
       .sort()
       .join(",");
 
-    const actuales = [...tagsTicket]
+    const actuales = tagsTicket
       .map((tag) => tag.id)
       .sort()
       .join(",");
@@ -395,180 +402,188 @@ export default function TicketPage() {
     tagsTicketOriginales,
   ]);
 
+  const haySeguimientoPendiente =
+    nuevoSeguimiento.trim().length > 0 ||
+    imagenesPendientes.length > 0;
+
+  const hayCualquierCambio =
+    rol === "ADMIN"
+      ? hayCambiosAdmin || haySeguimientoPendiente
+      : hayCambiosUsuario || haySeguimientoPendiente;
+
   /* =========================================================
-     GUARDAR USUARIO
+     GUARDAR DATOS USUARIO
   ========================================================= */
 
-  async function guardarDatosContacto() {
+  async function guardarDatosUsuario() {
     if (!ticket || rol !== "USUARIO") return;
 
-    setError("");
-    setMensajeGuardado("");
-
-    if (!nombre.trim() || !empresa.trim() || !email.trim()) {
-      setError(
+    if (
+      !nombre.trim() ||
+      !empresa.trim() ||
+      !email.trim()
+    ) {
+      throw new Error(
         "Nombre, empresa y correo electrónico son obligatorios."
       );
-      return;
     }
-
-    setGuardando(true);
 
     const ahora = new Date().toISOString();
 
-    const { error: guardarError } = await supabase
-      .from("it_tickets")
-      .update({
-        nombre: nombre.trim(),
-        empresa: empresa.trim(),
-        email: email.trim(),
-        telefono: telefono.trim() || null,
-        actualizado_en: ahora,
-      })
-      .eq("id", ticket.id);
+    const { error: guardarError } =
+      await supabase
+        .from("it_tickets")
+        .update({
+          nombre: nombre.trim(),
+          empresa: empresa.trim(),
+          email: email.trim(),
+          telefono: telefono.trim() || null,
+          actualizado_en: ahora,
+        })
+        .eq("id", ticket.id);
 
     if (guardarError) {
-      setError(
-        `No se han podido guardar los datos: ${guardarError.message}`
-      );
-      setGuardando(false);
-      return;
+      throw guardarError;
     }
 
-    setTicket({
-      ...ticket,
-      nombre: nombre.trim(),
-      empresa: empresa.trim(),
-      email: email.trim(),
-      telefono: telefono.trim() || null,
-      actualizado_en: ahora,
-    });
-
-    setMensajeGuardado("Información actualizada");
-    setGuardando(false);
+    setTicket((actual) =>
+      actual
+        ? {
+            ...actual,
+            nombre: nombre.trim(),
+            empresa: empresa.trim(),
+            email: email.trim(),
+            telefono: telefono.trim() || null,
+            actualizado_en: ahora,
+          }
+        : actual
+    );
   }
 
   /* =========================================================
      GUARDAR ADMIN
   ========================================================= */
 
-  async function guardarCambiosAdmin() {
+  async function guardarDatosAdmin() {
     if (!ticket || rol !== "ADMIN") return;
 
-    setError("");
-    setMensajeGuardado("");
-    setGuardando(true);
+    const ahora = new Date().toISOString();
 
-    try {
-      const ahora = new Date().toISOString();
+    const cambiosTicket: {
+      estado: Estado;
+      importancia: Importancia;
+      actualizado_en: string;
+      resuelto_en: string | null;
+      resuelto_por: string | null;
+    } = {
+      estado: estadoEditado,
+      importancia: importanciaEditada,
+      actualizado_en: ahora,
+      resuelto_en: null,
+      resuelto_por: null,
+    };
 
-      const cambiosTicket: any = {
-        estado: estadoEditado,
-        importancia: importanciaEditada,
-        actualizado_en: ahora,
-      };
+    if (estadoEditado === "RESUELTO") {
+      cambiosTicket.resuelto_en =
+        ticket.estado === "RESUELTO" &&
+        ticket.resuelto_en
+          ? ticket.resuelto_en
+          : ahora;
 
-      if (estadoEditado === "RESUELTO") {
-        cambiosTicket.resuelto_en =
-          ticket.estado === "RESUELTO" && ticket.resuelto_en
-            ? ticket.resuelto_en
-            : ahora;
+      cambiosTicket.resuelto_por =
+        ticket.estado === "RESUELTO" &&
+        ticket.resuelto_por
+          ? ticket.resuelto_por
+          : userId;
+    }
 
-        cambiosTicket.resuelto_por =
-          ticket.estado === "RESUELTO" && ticket.resuelto_por
-            ? ticket.resuelto_por
-            : userId;
-      } else {
-        cambiosTicket.resuelto_en = null;
-        cambiosTicket.resuelto_por = null;
-      }
-
-      const { error: ticketError } = await supabase
+    const { error: ticketError } =
+      await supabase
         .from("it_tickets")
         .update(cambiosTicket)
         .eq("id", ticket.id);
 
-      if (ticketError) {
-        throw ticketError;
-      }
+    if (ticketError) {
+      throw ticketError;
+    }
 
-      const idsOriginales = tagsTicketOriginales.map(
+    /* TAGS */
+
+    const idsOriginales =
+      tagsTicketOriginales.map(
         (tag) => tag.id
       );
 
-      const idsActuales = tagsTicket.map((tag) => tag.id);
+    const idsActuales =
+      tagsTicket.map(
+        (tag) => tag.id
+      );
 
-      const tagsParaAñadir = idsActuales.filter(
+    const tagsParaAñadir =
+      idsActuales.filter(
         (id) => !idsOriginales.includes(id)
       );
 
-      const tagsParaQuitar = idsOriginales.filter(
+    const tagsParaQuitar =
+      idsOriginales.filter(
         (id) => !idsActuales.includes(id)
       );
 
-      if (tagsParaAñadir.length > 0) {
-        const relaciones = tagsParaAñadir.map((tagId) => ({
+    if (tagsParaAñadir.length > 0) {
+      const relaciones =
+        tagsParaAñadir.map((tagId) => ({
           ticket_id: ticket.id,
           tag_id: tagId,
         }));
 
-        const { error: insertError } = await supabase
+      const { error: insertError } =
+        await supabase
           .from("it_ticket_tags")
           .upsert(relaciones, {
             onConflict: "ticket_id,tag_id",
             ignoreDuplicates: true,
           });
 
-        if (insertError) {
-          throw insertError;
-        }
+      if (insertError) {
+        throw insertError;
       }
+    }
 
-      if (tagsParaQuitar.length > 0) {
-        const { error: deleteError } = await supabase
+    if (tagsParaQuitar.length > 0) {
+      const { error: deleteError } =
+        await supabase
           .from("it_ticket_tags")
           .delete()
           .eq("ticket_id", ticket.id)
           .in("tag_id", tagsParaQuitar);
 
-        if (deleteError) {
-          throw deleteError;
-        }
+      if (deleteError) {
+        throw deleteError;
       }
-
-      setTicket({
-        ...ticket,
-        estado: estadoEditado,
-        importancia: importanciaEditada,
-        actualizado_en: ahora,
-        resuelto_en:
-          estadoEditado === "RESUELTO"
-            ? cambiosTicket.resuelto_en
-            : null,
-        resuelto_por:
-          estadoEditado === "RESUELTO"
-            ? cambiosTicket.resuelto_por
-            : null,
-      });
-
-      setTagsTicketOriginales([...tagsTicket]);
-
-      setMensajeGuardado("Ticket actualizado");
-    } catch (err: any) {
-      console.error(err);
-
-      setError(
-        `No se han podido guardar los cambios: ${
-          err?.message ?? "Error desconocido"
-        }`
-      );
-    } finally {
-      setGuardando(false);
     }
+
+    setTicket((actual) =>
+      actual
+        ? {
+            ...actual,
+            estado: estadoEditado,
+            importancia: importanciaEditada,
+            actualizado_en: ahora,
+            resuelto_en:
+              cambiosTicket.resuelto_en,
+            resuelto_por:
+              cambiosTicket.resuelto_por,
+          }
+        : actual
+    );
+
+    setTagsTicketOriginales([
+      ...tagsTicket,
+    ]);
   }
 
   /* =========================================================
-     TAGS EN MEMORIA
+     TAGS EN PANTALLA
   ========================================================= */
 
   function seleccionarTag(tagId: string) {
@@ -580,11 +595,16 @@ export default function TicketPage() {
 
     if (existe) return;
 
-    const tag = tags.find((item) => item.id === tagId);
+    const tag = tags.find(
+      (item) => item.id === tagId
+    );
 
     if (!tag) return;
 
-    setTagsTicket((actuales) => [...actuales, tag]);
+    setTagsTicket((actuales) => [
+      ...actuales,
+      tag,
+    ]);
 
     setMensajeGuardado("");
   }
@@ -593,7 +613,9 @@ export default function TicketPage() {
     if (rol !== "ADMIN") return;
 
     setTagsTicket((actuales) =>
-      actuales.filter((tag) => tag.id !== tagId)
+      actuales.filter(
+        (tag) => tag.id !== tagId
+      )
     );
 
     setMensajeGuardado("");
@@ -610,82 +632,107 @@ export default function TicketPage() {
     setError("");
     setMensajeGuardado("");
 
-    const nombreNuevo = nuevoTagNombre
-      .trim()
-      .toUpperCase();
+    const nombreNuevo =
+      nuevoTagNombre
+        .trim()
+        .toUpperCase();
 
-    const tagExistente = tags.find(
+    const existente = tags.find(
       (tag) =>
         tag.nombre.toUpperCase() ===
-        nombreNuevo.toUpperCase()
+        nombreNuevo
     );
 
-    if (tagExistente) {
-      seleccionarTag(tagExistente.id);
+    if (existente) {
+      seleccionarTag(existente.id);
       setNuevoTagNombre("");
       return;
     }
 
-    const { data, error: crearError } = await supabase
-      .from("it_tags")
-      .insert({
-        nombre: nombreNuevo,
-        color: nuevoTagColor,
-        creado_por: userId,
-      })
-      .select("id, nombre, color")
-      .single();
+    const { data, error: crearError } =
+      await supabase
+        .from("it_tags")
+        .insert({
+          nombre: nombreNuevo,
+          color: nuevoTagColor,
+          creado_por: userId,
+        })
+        .select("id, nombre, color")
+        .single();
 
     if (crearError) {
-      setError(
+      throw new Error(
         crearError.code === "23505"
           ? "Ya existe un tag con ese nombre."
-          : `No se ha podido crear el tag: ${crearError.message}`
+          : crearError.message
       );
-      return;
     }
 
     const nuevoTag = data as Tag;
 
     setTags((actuales) =>
-      [...actuales, nuevoTag].sort((a, b) =>
-        a.nombre.localeCompare(b.nombre)
+      [...actuales, nuevoTag].sort(
+        (a, b) =>
+          a.nombre.localeCompare(b.nombre)
       )
     );
 
-    setTagsTicket((actuales) => [
-      ...actuales,
-      nuevoTag,
-    ]);
+    /*
+     * IMPORTANTE:
+     * Crear el tag NO lo mete todavía en
+     * it_ticket_tags.
+     *
+     * Solo lo dejamos seleccionado.
+     * El botón Guardar cambios hará la relación.
+     */
+    setTagsTicket((actuales) => {
+      if (
+        actuales.some(
+          (tag) => tag.id === nuevoTag.id
+        )
+      ) {
+        return actuales;
+      }
+
+      return [...actuales, nuevoTag];
+    });
 
     setNuevoTagNombre("");
     setNuevoTagColor("#00AF9A");
   }
 
   /* =========================================================
-     IMÁGENES PENDIENTES
+     IMÁGENES
   ========================================================= */
 
   function seleccionarImagenes(
     event: ChangeEvent<HTMLInputElement>
   ) {
-    const seleccionadas = Array.from(
-      event.target.files ?? []
-    );
+    const seleccionadas =
+      Array.from(
+        event.target.files ?? []
+      );
 
-    if (seleccionadas.length === 0) return;
+    if (seleccionadas.length === 0) {
+      return;
+    }
 
     setError("");
+    setMensajeGuardado("");
 
-    const permitidos = [
+    const tiposPermitidos = [
       "image/jpeg",
       "image/png",
       "image/webp",
     ];
 
-    const invalidas = seleccionadas.filter(
-      (file) => !permitidos.includes(file.type)
-    );
+    const invalidas =
+      seleccionadas.filter(
+        (file) =>
+          !tiposPermitidos.includes(
+            file.type
+          )
+      );
 
     if (invalidas.length > 0) {
       setError(
@@ -696,10 +743,12 @@ export default function TicketPage() {
       return;
     }
 
-    // 10 MB máximo por imagen
-    const demasiadoGrandes = seleccionadas.filter(
-      (file) => file.size > 10 * 1024 * 1024
-    );
+    const demasiadoGrandes =
+      seleccionadas.filter(
+        (file) =>
+          file.size >
+          10 * 1024 * 1024
+      );
 
     if (demasiadoGrandes.length > 0) {
       setError(
@@ -710,174 +759,292 @@ export default function TicketPage() {
       return;
     }
 
-    const nuevas = seleccionadas.map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-    }));
+    const nuevas =
+      seleccionadas.map((file) => ({
+        file,
+        preview:
+          URL.createObjectURL(file),
+      }));
 
-    setImagenesPendientes((actuales) => [
-      ...actuales,
-      ...nuevas,
-    ]);
+    setImagenesPendientes(
+      (actuales) => [
+        ...actuales,
+        ...nuevas,
+      ]
+    );
 
     event.target.value = "";
   }
 
-  function quitarImagenPendiente(index: number) {
-    setImagenesPendientes((actuales) => {
-      const imagen = actuales[index];
+  function quitarImagenPendiente(
+    index: number
+  ) {
+    setImagenesPendientes(
+      (actuales) => {
+        const imagen = actuales[index];
 
-      if (imagen) {
-        URL.revokeObjectURL(imagen.preview);
+        if (imagen) {
+          URL.revokeObjectURL(
+            imagen.preview
+          );
+        }
+
+        return actuales.filter(
+          (_, i) => i !== index
+        );
       }
+    );
 
-      return actuales.filter((_, i) => i !== index);
-    });
+    setMensajeGuardado("");
   }
 
   /* =========================================================
-     ENVIAR SEGUIMIENTO
+     GUARDAR SEGUIMIENTO
   ========================================================= */
 
-  async function enviarSeguimiento() {
+  async function guardarSeguimiento() {
     if (!ticket) return;
 
-    const texto = nuevoSeguimiento.trim();
+    const texto =
+      nuevoSeguimiento.trim();
 
-    if (!texto && imagenesPendientes.length === 0) {
+    if (
+      !texto &&
+      imagenesPendientes.length === 0
+    ) {
       return;
     }
 
-    setEnviandoSeguimiento(true);
+    /*
+     * mensaje es NOT NULL.
+     * Si solo hay imágenes utilizamos este
+     * valor interno y no lo mostramos.
+     */
+    const mensajeBD =
+      texto || "Imagen adjunta";
+
+    const {
+      data: seguimientoData,
+      error: seguimientoError,
+    } = await supabase
+      .from("it_seguimientos")
+      .insert({
+        ticket_id: ticket.id,
+        creado_por: userId,
+        mensaje: mensajeBD,
+      })
+      .select(`
+        id,
+        ticket_id,
+        creado_por,
+        mensaje,
+        creado_en
+      `)
+      .single();
+
+    if (seguimientoError) {
+      throw seguimientoError;
+    }
+
+    const seguimiento =
+      seguimientoData as Seguimiento;
+
+    const nuevosArchivos:
+      ArchivoSeguimiento[] = [];
+
+    for (
+      let i = 0;
+      i < imagenesPendientes.length;
+      i++
+    ) {
+      const imagen =
+        imagenesPendientes[i];
+
+      const extension =
+        imagen.file.name
+          .split(".")
+          .pop()
+          ?.toLowerCase() ??
+        "jpg";
+
+      const nombreSeguro =
+        imagen.file.name
+          .replace(/\.[^/.]+$/, "")
+          .replace(
+            /[^a-zA-Z0-9-_]/g,
+            "-"
+          )
+          .slice(0, 70);
+
+      /*
+       * Añadimos índice + random para
+       * impedir nombres duplicados.
+       */
+      const ruta =
+        `${ticket.id}/` +
+        `${seguimiento.id}/` +
+        `${Date.now()}-${i}-${crypto.randomUUID()}-` +
+        `${nombreSeguro}.${extension}`;
+
+      const { error: uploadError } =
+        await supabase.storage
+          .from("it-tickets")
+          .upload(
+            ruta,
+            imagen.file,
+            {
+              cacheControl: "3600",
+              upsert: false,
+              contentType:
+                imagen.file.type,
+            }
+          );
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const {
+        data: archivoData,
+        error: archivoError,
+      } = await supabase
+        .from(
+          "it_seguimiento_archivos"
+        )
+        .insert({
+          seguimiento_id:
+            seguimiento.id,
+          ticket_id: ticket.id,
+          nombre_archivo:
+            imagen.file.name,
+          ruta_storage: ruta,
+          tipo_mime:
+            imagen.file.type,
+          tamano:
+            imagen.file.size,
+          creado_por: userId,
+        })
+        .select(`
+          id,
+          seguimiento_id,
+          ticket_id,
+          nombre_archivo,
+          ruta_storage,
+          tipo_mime,
+          tamano,
+          creado_por,
+          creado_en
+        `)
+        .single();
+
+      if (archivoError) {
+        throw archivoError;
+      }
+
+      const { data: signedData } =
+        await supabase.storage
+          .from("it-tickets")
+          .createSignedUrl(
+            ruta,
+            60 * 60
+          );
+
+      nuevosArchivos.push({
+        ...(archivoData as ArchivoSeguimiento),
+        url: signedData?.signedUrl,
+      });
+    }
+
+    setSeguimientos(
+      (actuales) => [
+        ...actuales,
+        seguimiento,
+      ]
+    );
+
+    setArchivos(
+      (actuales) => [
+        ...actuales,
+        ...nuevosArchivos,
+      ]
+    );
+
+    imagenesPendientes.forEach(
+      (imagen) => {
+        URL.revokeObjectURL(
+          imagen.preview
+        );
+      }
+    );
+
+    setImagenesPendientes([]);
+    setNuevoSeguimiento("");
+  }
+
+  /* =========================================================
+     ÚNICO BOTÓN GUARDAR
+  ========================================================= */
+
+  async function guardarTodo() {
+    if (
+      !ticket ||
+      !rol ||
+      !hayCualquierCambio ||
+      guardando
+    ) {
+      return;
+    }
+
+    setGuardando(true);
     setError("");
+    setMensajeGuardado("");
 
     try {
       /*
-       * La columna mensaje es NOT NULL.
-       * Si se envían solo imágenes guardamos un texto neutro.
+       * ADMIN
        */
-      const mensajeBD =
-        texto || "Imagen adjunta";
-
-      const { data: seguimientoData, error: seguimientoError } =
-        await supabase
-          .from("it_seguimientos")
-          .insert({
-            ticket_id: ticket.id,
-            creado_por: userId,
-            mensaje: mensajeBD,
-          })
-          .select(`
-            id,
-            ticket_id,
-            creado_por,
-            mensaje,
-            creado_en
-          `)
-          .single();
-
-      if (seguimientoError) {
-        throw seguimientoError;
+      if (
+        rol === "ADMIN" &&
+        hayCambiosAdmin
+      ) {
+        await guardarDatosAdmin();
       }
 
-      const seguimiento =
-        seguimientoData as Seguimiento;
-
-      const nuevosArchivos: ArchivoSeguimiento[] = [];
-
-      for (const imagen of imagenesPendientes) {
-        const extension =
-          imagen.file.name.split(".").pop()?.toLowerCase() ??
-          "jpg";
-
-        const nombreSeguro = imagen.file.name
-          .replace(/\.[^/.]+$/, "")
-          .replace(/[^a-zA-Z0-9-_]/g, "-")
-          .slice(0, 70);
-
-        const ruta = `${ticket.id}/${seguimiento.id}/${Date.now()}-${nombreSeguro}.${extension}`;
-
-        const { error: uploadError } =
-          await supabase.storage
-            .from("it-tickets")
-            .upload(ruta, imagen.file, {
-              cacheControl: "3600",
-              upsert: false,
-              contentType: imagen.file.type,
-            });
-
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        const {
-          data: archivoData,
-          error: archivoError,
-        } = await supabase
-          .from("it_seguimiento_archivos")
-          .insert({
-            seguimiento_id: seguimiento.id,
-            ticket_id: ticket.id,
-            nombre_archivo: imagen.file.name,
-            ruta_storage: ruta,
-            tipo_mime: imagen.file.type,
-            tamano: imagen.file.size,
-            creado_por: userId,
-          })
-          .select(`
-            id,
-            seguimiento_id,
-            ticket_id,
-            nombre_archivo,
-            ruta_storage,
-            tipo_mime,
-            tamano,
-            creado_por,
-            creado_en
-          `)
-          .single();
-
-        if (archivoError) {
-          throw archivoError;
-        }
-
-        const { data: signedData } =
-          await supabase.storage
-            .from("it-tickets")
-            .createSignedUrl(ruta, 60 * 60);
-
-        nuevosArchivos.push({
-          ...(archivoData as ArchivoSeguimiento),
-          url: signedData?.signedUrl,
-        });
+      /*
+       * USUARIO
+       */
+      if (
+        rol === "USUARIO" &&
+        hayCambiosUsuario
+      ) {
+        await guardarDatosUsuario();
       }
 
-      setSeguimientos((actuales) => [
-        ...actuales,
-        seguimiento,
-      ]);
+      /*
+       * SEGUIMIENTO
+       *
+       * Funciona para ADMIN y USUARIO.
+       * También funciona si SOLO
+       * hemos adjuntado una imagen.
+       */
+      if (haySeguimientoPendiente) {
+        await guardarSeguimiento();
+      }
 
-      setArchivos((actuales) => [
-        ...actuales,
-        ...nuevosArchivos,
-      ]);
-
-      imagenesPendientes.forEach((imagen) => {
-        URL.revokeObjectURL(imagen.preview);
-      });
-
-      setImagenesPendientes([]);
-      setNuevoSeguimiento("");
+      setMensajeGuardado(
+        "Ticket actualizado"
+      );
     } catch (err: any) {
       console.error(err);
 
       setError(
-        `No se ha podido añadir el seguimiento: ${
-          err?.message ?? "Error desconocido"
+        `No se han podido guardar los cambios: ${
+          err?.message ??
+          "Error desconocido"
         }`
       );
     } finally {
-      setEnviandoSeguimiento(false);
+      setGuardando(false);
     }
   }
 
@@ -889,7 +1056,9 @@ export default function TicketPage() {
     return (
       <main style={styles.loading}>
         <div style={styles.loadingIcon}>
-          <SupportIcon color="#00AF9A" />
+          <SupportIcon
+            color="#00AF9A"
+          />
         </div>
 
         <p style={styles.loadingText}>
@@ -898,6 +1067,10 @@ export default function TicketPage() {
       </main>
     );
   }
+
+  /* =========================================================
+     NO ENCONTRADO
+  ========================================================= */
 
   if (!ticket) {
     return (
@@ -913,7 +1086,9 @@ export default function TicketPage() {
 
         <div style={styles.container}>
           <button
-            onClick={() => router.push("/")}
+            onClick={() =>
+              router.push("/")
+            }
             style={styles.backButton}
           >
             <ArrowLeftIcon />
@@ -921,17 +1096,30 @@ export default function TicketPage() {
           </button>
 
           <div style={styles.notFound}>
-            <div style={styles.notFoundIcon}>
+            <div
+              style={
+                styles.notFoundIcon
+              }
+            >
               <TicketIcon />
             </div>
 
-            <h1 style={styles.notFoundTitle}>
+            <h1
+              style={
+                styles.notFoundTitle
+              }
+            >
               Ticket no disponible
             </h1>
 
-            <p style={styles.notFoundText}>
-              El ticket no existe o no tienes permiso
-              para consultarlo.
+            <p
+              style={
+                styles.notFoundText
+              }
+            >
+              El ticket no existe o no
+              tienes permiso para
+              consultarlo.
             </p>
           </div>
         </div>
@@ -956,7 +1144,9 @@ export default function TicketPage() {
 
       <div style={styles.container}>
         <button
-          onClick={() => router.push("/")}
+          onClick={() =>
+            router.push("/")
+          }
           style={styles.backButton}
         >
           <ArrowLeftIcon />
@@ -965,9 +1155,17 @@ export default function TicketPage() {
 
         {/* CABECERA */}
 
-        <section style={styles.ticketHeader}>
-          <div style={styles.ticketHeaderLeft}>
-            <div style={styles.ticketNumber}>
+        <section
+          style={styles.ticketHeader}
+        >
+          <div
+            style={
+              styles.ticketHeaderLeft
+            }
+          >
+            <div
+              style={styles.ticketNumber}
+            >
               {ticket.numero
                 ? `TICKET #${ticket.numero}`
                 : "TICKET"}
@@ -977,35 +1175,70 @@ export default function TicketPage() {
               {ticket.titulo}
             </h1>
 
-            <div style={styles.headerMeta}>
+            <div
+              style={styles.headerMeta}
+            >
               <span>
-                Creado {formatearFecha(ticket.creado_en)}
+                Creado{" "}
+                {formatearFecha(
+                  ticket.creado_en
+                )}
               </span>
 
-              <span style={styles.metaDot}>•</span>
+              <span
+                style={styles.metaDot}
+              >
+                •
+              </span>
 
-              <span>{ticket.nombre}</span>
+              <span>
+                {ticket.nombre}
+              </span>
 
-              <span style={styles.metaDot}>•</span>
+              <span
+                style={styles.metaDot}
+              >
+                •
+              </span>
 
-              <span>{ticket.empresa}</span>
+              <span>
+                {ticket.empresa}
+              </span>
             </div>
           </div>
 
-          <div style={styles.ticketHeaderRight}>
-            <div style={styles.headerControl}>
-              <span style={styles.controlLabel}>
+          <div
+            style={
+              styles.ticketHeaderRight
+            }
+          >
+            <div
+              style={
+                styles.headerControl
+              }
+            >
+              <span
+                style={
+                  styles.controlLabel
+                }
+              >
                 Importancia
               </span>
 
               {rol === "ADMIN" ? (
                 <select
-                  value={importanciaEditada}
+                  value={
+                    importanciaEditada
+                  }
                   onChange={(e) => {
                     setImportanciaEditada(
-                      e.target.value as Importancia
+                      e.target
+                        .value as Importancia
                     );
-                    setMensajeGuardado("");
+
+                    setMensajeGuardado(
+                      ""
+                    );
                   }}
                   style={{
                     ...styles.controlSelect,
@@ -1014,20 +1247,41 @@ export default function TicketPage() {
                     ),
                   }}
                 >
-                  <option value="BAJA">● Baja</option>
-                  <option value="MEDIA">● Media</option>
-                  <option value="ALTA">● Alta</option>
-                  <option value="URGENTE">● Urgente</option>
+                  <option value="BAJA">
+                    ● Baja
+                  </option>
+
+                  <option value="MEDIA">
+                    ● Media
+                  </option>
+
+                  <option value="ALTA">
+                    ● Alta
+                  </option>
+
+                  <option value="URGENTE">
+                    ● Urgente
+                  </option>
                 </select>
               ) : (
                 <PriorityBadge
-                  importancia={ticket.importancia}
+                  importancia={
+                    ticket.importancia
+                  }
                 />
               )}
             </div>
 
-            <div style={styles.headerControl}>
-              <span style={styles.controlLabel}>
+            <div
+              style={
+                styles.headerControl
+              }
+            >
+              <span
+                style={
+                  styles.controlLabel
+                }
+              >
                 Estado
               </span>
 
@@ -1036,13 +1290,19 @@ export default function TicketPage() {
                   value={estadoEditado}
                   onChange={(e) => {
                     setEstadoEditado(
-                      e.target.value as Estado
+                      e.target
+                        .value as Estado
                     );
-                    setMensajeGuardado("");
+
+                    setMensajeGuardado(
+                      ""
+                    );
                   }}
                   style={{
                     ...styles.controlSelect,
-                    ...getEstadoStyle(estadoEditado),
+                    ...getEstadoStyle(
+                      estadoEditado
+                    ),
                   }}
                 >
                   <option value="PENDIENTE">
@@ -1058,7 +1318,9 @@ export default function TicketPage() {
                   </option>
                 </select>
               ) : (
-                <StatusBadge estado={ticket.estado} />
+                <StatusBadge
+                  estado={ticket.estado}
+                />
               )}
             </div>
           </div>
@@ -1067,8 +1329,11 @@ export default function TicketPage() {
         {/* ERROR */}
 
         {error && (
-          <div style={styles.errorMessage}>
+          <div
+            style={styles.errorMessage}
+          >
             <AlertIcon />
+
             <span>{error}</span>
           </div>
         )}
@@ -1076,43 +1341,88 @@ export default function TicketPage() {
         <div style={styles.layout}>
           {/* COLUMNA PRINCIPAL */}
 
-          <div style={styles.mainColumn}>
+          <div
+            style={styles.mainColumn}
+          >
             {/* INCIDENCIA */}
 
-            <section style={styles.card}>
-              <div style={styles.cardHeading}>
-                <div style={styles.sectionIcon}>
+            <section
+              style={styles.card}
+            >
+              <div
+                style={
+                  styles.cardHeading
+                }
+              >
+                <div
+                  style={
+                    styles.sectionIcon
+                  }
+                >
                   <IncidentIcon />
                 </div>
 
                 <div>
-                  <h2 style={styles.cardTitle}>
+                  <h2
+                    style={
+                      styles.cardTitle
+                    }
+                  >
                     Incidencia
                   </h2>
 
-                  <p style={styles.cardSubtitle}>
-                    Información original enviada al crear
-                    el ticket.
+                  <p
+                    style={
+                      styles.cardSubtitle
+                    }
+                  >
+                    Información original
+                    enviada al crear el
+                    ticket.
                   </p>
                 </div>
               </div>
 
-              <div style={styles.readOnlyField}>
-                <span style={styles.fieldLabel}>
+              <div
+                style={
+                  styles.readOnlyField
+                }
+              >
+                <span
+                  style={
+                    styles.fieldLabel
+                  }
+                >
                   Título
                 </span>
 
-                <div style={styles.readOnlyValue}>
+                <div
+                  style={
+                    styles.readOnlyValue
+                  }
+                >
                   {ticket.titulo}
                 </div>
               </div>
 
-              <div style={styles.readOnlyField}>
-                <span style={styles.fieldLabel}>
+              <div
+                style={
+                  styles.readOnlyField
+                }
+              >
+                <span
+                  style={
+                    styles.fieldLabel
+                  }
+                >
                   Descripción
                 </span>
 
-                <div style={styles.descriptionBox}>
+                <div
+                  style={
+                    styles.descriptionBox
+                  }
+                >
                   {ticket.descripcion}
                 </div>
               </div>
@@ -1120,163 +1430,228 @@ export default function TicketPage() {
 
             {/* SEGUIMIENTO */}
 
-            <section style={styles.card}>
-              <div style={styles.cardHeading}>
-                <div style={styles.sectionIcon}>
+            <section
+              style={styles.card}
+            >
+              <div
+                style={
+                  styles.cardHeading
+                }
+              >
+                <div
+                  style={
+                    styles.sectionIcon
+                  }
+                >
                   <ConversationIcon />
                 </div>
 
                 <div>
-                  <h2 style={styles.cardTitle}>
+                  <h2
+                    style={
+                      styles.cardTitle
+                    }
+                  >
                     Seguimiento
                   </h2>
 
-                  <p style={styles.cardSubtitle}>
-                    Historial de comunicaciones sobre esta
-                    incidencia.
+                  <p
+                    style={
+                      styles.cardSubtitle
+                    }
+                  >
+                    Historial de
+                    comunicaciones sobre
+                    esta incidencia.
                   </p>
                 </div>
               </div>
 
-              {seguimientos.length === 0 ? (
-                <div style={styles.noFollowUps}>
-                  Todavía no hay notas de seguimiento.
+              {/* HISTORIAL */}
+
+              {seguimientos.length ===
+              0 ? (
+                <div
+                  style={
+                    styles.noFollowUps
+                  }
+                >
+                  Todavía no hay notas de
+                  seguimiento.
                 </div>
               ) : (
-                <div style={styles.timeline}>
-                  {seguimientos.map((seguimiento) => {
-                    const esCreadorTicket =
-                      seguimiento.creado_por ===
-                      ticket.creado_por;
+                <div
+                  style={styles.timeline}
+                >
+                  {seguimientos.map(
+                    (seguimiento) => {
+                      const esCreador =
+                        seguimiento.creado_por ===
+                        ticket.creado_por;
 
-                    const esMio =
-                      seguimiento.creado_por === userId;
+                      const esMio =
+                        seguimiento.creado_por ===
+                        userId;
 
-                    const esInformatico =
-                      !esCreadorTicket;
+                      const esInformatico =
+                        !esCreador;
 
-                    const imagenesSeguimiento =
-                      archivos.filter(
-                        (archivo) =>
-                          archivo.seguimiento_id ===
-                          seguimiento.id
-                      );
+                      const imagenes =
+                        archivos.filter(
+                          (archivo) =>
+                            archivo.seguimiento_id ===
+                            seguimiento.id
+                        );
 
-                    const soloImagen =
-                      seguimiento.mensaje ===
-                        "Imagen adjunta" &&
-                      imagenesSeguimiento.length > 0;
+                      const soloImagen =
+                        seguimiento.mensaje ===
+                          "Imagen adjunta" &&
+                        imagenes.length > 0;
 
-                    return (
-                      <div
-                        key={seguimiento.id}
-                        style={styles.timelineItem}
-                      >
+                      return (
                         <div
-                          style={{
-                            ...styles.timelineAvatar,
-                            ...(esInformatico
-                              ? styles.timelineAvatarIT
-                              : styles.timelineAvatarUser),
-                          }}
+                          key={
+                            seguimiento.id
+                          }
+                          style={
+                            styles.timelineItem
+                          }
                         >
-                          {esInformatico ? (
-                            <SupportIcon
-                              color="#ffffff"
-                              size={16}
-                            />
-                          ) : (
-                            <UserSmallIcon />
-                          )}
-                        </div>
-
-                        <div style={styles.timelineContent}>
-                          <div style={styles.timelineHeader}>
-                            <strong
-                              style={styles.timelineAuthor}
-                            >
-                              {esInformatico
-                                ? "Informática"
-                                : esMio
-                                ? "Tú"
-                                : ticket.nombre}
-                            </strong>
-
-                            <span
-                              style={styles.timelineDate}
-                            >
-                              {formatearFecha(
-                                seguimiento.creado_en
-                              )}
-                            </span>
+                          <div
+                            style={{
+                              ...styles.timelineAvatar,
+                              ...(esInformatico
+                                ? styles.timelineAvatarIT
+                                : styles.timelineAvatarUser),
+                            }}
+                          >
+                            {esInformatico ? (
+                              <SupportIcon
+                                color="#ffffff"
+                                size={16}
+                              />
+                            ) : (
+                              <UserSmallIcon />
+                            )}
                           </div>
 
-                          {!soloImagen && (
-                            <div
-                              style={styles.timelineMessage}
-                            >
-                              {seguimiento.mensaje}
-                            </div>
-                          )}
-
-                          {imagenesSeguimiento.length >
-                            0 && (
+                          <div
+                            style={
+                              styles.timelineContent
+                            }
+                          >
                             <div
                               style={
-                                styles.followUpImages
+                                styles.timelineHeader
                               }
                             >
-                              {imagenesSeguimiento.map(
-                                (archivo) =>
-                                  archivo.url ? (
-                                    <button
-                                      key={archivo.id}
-                                      type="button"
-                                      onClick={() =>
-                                        setImagenAmpliada(
-                                          archivo.url!
-                                        )
-                                      }
-                                      style={
-                                        styles.followUpImageButton
-                                      }
-                                      title={
-                                        archivo.nombre_archivo
-                                      }
-                                    >
-                                      <img
-                                        src={archivo.url}
-                                        alt={
-                                          archivo.nombre_archivo
+                              <strong
+                                style={
+                                  styles.timelineAuthor
+                                }
+                              >
+                                {esInformatico
+                                  ? "Informática"
+                                  : esMio
+                                  ? "Tú"
+                                  : ticket.nombre}
+                              </strong>
+
+                              <span
+                                style={
+                                  styles.timelineDate
+                                }
+                              >
+                                {formatearFecha(
+                                  seguimiento.creado_en
+                                )}
+                              </span>
+                            </div>
+
+                            {!soloImagen && (
+                              <div
+                                style={
+                                  styles.timelineMessage
+                                }
+                              >
+                                {
+                                  seguimiento.mensaje
+                                }
+                              </div>
+                            )}
+
+                            {imagenes.length >
+                              0 && (
+                              <div
+                                style={
+                                  styles.followUpImages
+                                }
+                              >
+                                {imagenes.map(
+                                  (archivo) =>
+                                    archivo.url ? (
+                                      <button
+                                        key={
+                                          archivo.id
+                                        }
+                                        type="button"
+                                        onClick={() =>
+                                          setImagenAmpliada(
+                                            archivo.url!
+                                          )
                                         }
                                         style={
-                                          styles.followUpImage
+                                          styles.followUpImageButton
                                         }
-                                      />
-                                    </button>
-                                  ) : null
-                              )}
-                            </div>
-                          )}
+                                      >
+                                        <img
+                                          src={
+                                            archivo.url
+                                          }
+                                          alt={
+                                            archivo.nombre_archivo
+                                          }
+                                          style={
+                                            styles.followUpImage
+                                          }
+                                        />
+                                      </button>
+                                    ) : null
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    }
+                  )}
                 </div>
               )}
 
-              {/* NUEVO SEGUIMIENTO */}
+              {/* NUEVA NOTA */}
 
-              <div style={styles.followUpComposer}>
-                <label style={styles.fieldLabel}>
-                  Añadir seguimiento
+              <div
+                style={
+                  styles.followUpComposer
+                }
+              >
+                <label
+                  style={styles.fieldLabel}
+                >
+                  Nueva nota de seguimiento
                 </label>
 
                 <textarea
                   value={nuevoSeguimiento}
-                  onChange={(e) =>
-                    setNuevoSeguimiento(e.target.value)
-                  }
+                  onChange={(e) => {
+                    setNuevoSeguimiento(
+                      e.target.value
+                    );
+
+                    setMensajeGuardado(
+                      ""
+                    );
+                  }}
                   placeholder={
                     rol === "ADMIN"
                       ? "Escribe una nota o respuesta para el usuario..."
@@ -1285,29 +1660,45 @@ export default function TicketPage() {
                   style={styles.textarea}
                 />
 
-                {/* PREVISUALIZACIÓN */}
+                {/* PREVIEW */}
 
-                {imagenesPendientes.length > 0 && (
-                  <div style={styles.previewGrid}>
+                {imagenesPendientes.length >
+                  0 && (
+                  <div
+                    style={
+                      styles.previewGrid
+                    }
+                  >
                     {imagenesPendientes.map(
                       (imagen, index) => (
                         <div
                           key={`${imagen.file.name}-${index}`}
-                          style={styles.previewItem}
+                          style={
+                            styles.previewItem
+                          }
                         >
                           <img
-                            src={imagen.preview}
-                            alt={imagen.file.name}
-                            style={styles.previewImage}
+                            src={
+                              imagen.preview
+                            }
+                            alt={
+                              imagen.file.name
+                            }
+                            style={
+                              styles.previewImage
+                            }
                           />
 
                           <button
                             type="button"
                             onClick={() =>
-                              quitarImagenPendiente(index)
+                              quitarImagenPendiente(
+                                index
+                              )
                             }
-                            style={styles.removeImage}
-                            title="Quitar imagen"
+                            style={
+                              styles.removeImage
+                            }
                           >
                             ×
                           </button>
@@ -1317,86 +1708,161 @@ export default function TicketPage() {
                   </div>
                 )}
 
-                <div style={styles.composerFooter}>
-                  <div style={styles.composerLeft}>
-                    <label style={styles.attachButton}>
+                {/* ACCIONES */}
+
+                <div
+                  style={
+                    styles.composerFooter
+                  }
+                >
+                  <div
+                    style={
+                      styles.composerLeft
+                    }
+                  >
+                    <label
+                      style={
+                        styles.attachButton
+                      }
+                    >
                       <ImageIcon />
+
                       Adjuntar imágenes
 
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp"
                         multiple
-                        onChange={seleccionarImagenes}
-                        style={{ display: "none" }}
+                        onChange={
+                          seleccionarImagenes
+                        }
+                        style={{
+                          display: "none",
+                        }}
                       />
                     </label>
 
-                    <span style={styles.composerHint}>
-                      JPG, PNG o WEBP · Máx. 10 MB
+                    <span
+                      style={
+                        styles.composerHint
+                      }
+                    >
+                      JPG, PNG o WEBP ·
+                      Máx. 10 MB
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={enviarSeguimiento}
-                    disabled={
-                      enviandoSeguimiento ||
-                      (!nuevoSeguimiento.trim() &&
-                        imagenesPendientes.length === 0)
+                  <div
+                    style={
+                      styles.saveRight
                     }
-                    style={{
-                      ...styles.sendButton,
-                      opacity:
-                        enviandoSeguimiento ||
-                        (!nuevoSeguimiento.trim() &&
-                          imagenesPendientes.length === 0)
-                          ? 0.5
-                          : 1,
-                    }}
                   >
-                    <SendIcon />
+                    {mensajeGuardado && (
+                      <span
+                        style={
+                          styles.savedMessage
+                        }
+                      >
+                        <CheckIcon />
+                        {
+                          mensajeGuardado
+                        }
+                      </span>
+                    )}
 
-                    {enviandoSeguimiento
-                      ? "Enviando..."
-                      : "Añadir seguimiento"}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={guardarTodo}
+                      disabled={
+                        guardando ||
+                        !hayCualquierCambio
+                      }
+                      style={{
+                        ...styles.saveButton,
+                        opacity:
+                          guardando ||
+                          !hayCualquierCambio
+                            ? 0.5
+                            : 1,
+                        cursor:
+                          guardando ||
+                          !hayCualquierCambio
+                            ? "default"
+                            : "pointer",
+                      }}
+                    >
+                      <SaveIcon />
+
+                      {guardando
+                        ? "Guardando..."
+                        : "Guardar cambios"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
           </div>
 
-          {/* COLUMNA LATERAL */}
+          {/* COLUMNA DERECHA */}
 
-          <aside style={styles.sideColumn}>
+          <aside
+            style={styles.sideColumn}
+          >
             {/* CONTACTO */}
 
-            <section style={styles.card}>
-              <div style={styles.cardHeadingCompact}>
-                <div style={styles.sectionIcon}>
+            <section
+              style={styles.card}
+            >
+              <div
+                style={
+                  styles.cardHeadingCompact
+                }
+              >
+                <div
+                  style={
+                    styles.sectionIcon
+                  }
+                >
                   <UserIcon />
                 </div>
 
                 <div>
-                  <h2 style={styles.cardTitle}>
+                  <h2
+                    style={
+                      styles.cardTitle
+                    }
+                  >
                     Datos de contacto
                   </h2>
 
-                  <p style={styles.cardSubtitle}>
-                    Información del solicitante.
+                  <p
+                    style={
+                      styles.cardSubtitle
+                    }
+                  >
+                    Información del
+                    solicitante.
                   </p>
                 </div>
               </div>
 
-              <div style={styles.formStack}>
+              <div
+                style={styles.formStack}
+              >
                 <Field label="Nombre">
                   <input
                     value={nombre}
                     onChange={(e) => {
-                      setNombre(e.target.value);
-                      setMensajeGuardado("");
+                      setNombre(
+                        e.target.value
+                      );
+                      setMensajeGuardado(
+                        ""
+                      );
                     }}
-                    disabled={rol === "ADMIN"}
+                    disabled={
+                      rol === "ADMIN"
+                    }
                     style={{
                       ...styles.input,
                       ...(rol === "ADMIN"
@@ -1410,10 +1876,16 @@ export default function TicketPage() {
                   <input
                     value={empresa}
                     onChange={(e) => {
-                      setEmpresa(e.target.value);
-                      setMensajeGuardado("");
+                      setEmpresa(
+                        e.target.value
+                      );
+                      setMensajeGuardado(
+                        ""
+                      );
                     }}
-                    disabled={rol === "ADMIN"}
+                    disabled={
+                      rol === "ADMIN"
+                    }
                     style={{
                       ...styles.input,
                       ...(rol === "ADMIN"
@@ -1428,10 +1900,16 @@ export default function TicketPage() {
                     type="email"
                     value={email}
                     onChange={(e) => {
-                      setEmail(e.target.value);
-                      setMensajeGuardado("");
+                      setEmail(
+                        e.target.value
+                      );
+                      setMensajeGuardado(
+                        ""
+                      );
                     }}
-                    disabled={rol === "ADMIN"}
+                    disabled={
+                      rol === "ADMIN"
+                    }
                     style={{
                       ...styles.input,
                       ...(rol === "ADMIN"
@@ -1445,10 +1923,16 @@ export default function TicketPage() {
                   <input
                     value={telefono}
                     onChange={(e) => {
-                      setTelefono(e.target.value);
-                      setMensajeGuardado("");
+                      setTelefono(
+                        e.target.value
+                      );
+                      setMensajeGuardado(
+                        ""
+                      );
                     }}
-                    disabled={rol === "ADMIN"}
+                    disabled={
+                      rol === "ADMIN"
+                    }
                     style={{
                       ...styles.input,
                       ...(rol === "ADMIN"
@@ -1459,51 +1943,55 @@ export default function TicketPage() {
                 </Field>
 
                 {rol === "USUARIO" && (
-                  <div style={styles.saveArea}>
-                    <button
-                      type="button"
-                      onClick={guardarDatosContacto}
-                      disabled={
-                        guardando || !hayCambiosUsuario
-                      }
-                      style={{
-                        ...styles.saveButton,
-                        opacity:
-                          guardando ||
-                          !hayCambiosUsuario
-                            ? 0.55
-                            : 1,
-                      }}
-                    >
-                      {guardando
-                        ? "Guardando..."
-                        : "Guardar cambios"}
-                    </button>
-
-                    {mensajeGuardado && (
-                      <span style={styles.savedMessage}>
-                        <CheckIcon />
-                        {mensajeGuardado}
-                      </span>
-                    )}
-                  </div>
+                  <p
+                    style={
+                      styles.editHint
+                    }
+                  >
+                    Puedes corregir estos
+                    datos si detectas alguna
+                    errata. Los cambios se
+                    guardan con el botón
+                    inferior.
+                  </p>
                 )}
               </div>
             </section>
 
             {/* TAGS */}
 
-            <section style={styles.card}>
-              <div style={styles.cardHeadingCompact}>
-                <div style={styles.sectionIcon}>
+            <section
+              style={styles.card}
+            >
+              <div
+                style={
+                  styles.cardHeadingCompact
+                }
+              >
+                <div
+                  style={
+                    styles.sectionIcon
+                  }
+                >
                   <TagIcon />
                 </div>
 
                 <div>
-                  <h2 style={styles.cardTitle}>Tags</h2>
+                  <h2
+                    style={
+                      styles.cardTitle
+                    }
+                  >
+                    Tags
+                  </h2>
 
-                  <p style={styles.cardSubtitle}>
-                    Clasificación de la incidencia.
+                  <p
+                    style={
+                      styles.cardSubtitle
+                    }
+                  >
+                    Clasificación de la
+                    incidencia.
                   </p>
                 </div>
               </div>
@@ -1513,54 +2001,77 @@ export default function TicketPage() {
                   Sin tags asignados.
                 </p>
               ) : (
-                <div style={styles.tagsContainer}>
-                  {tagsTicket.map((tag) => (
-                    <span
-                      key={tag.id}
-                      style={{
-                        ...styles.tag,
-                        borderColor: tag.color,
-                        color: tag.color,
-                      }}
-                    >
+                <div
+                  style={
+                    styles.tagsContainer
+                  }
+                >
+                  {tagsTicket.map(
+                    (tag) => (
                       <span
+                        key={tag.id}
                         style={{
-                          ...styles.tagDot,
-                          background: tag.color,
+                          ...styles.tag,
+                          borderColor:
+                            tag.color,
+                          color:
+                            tag.color,
                         }}
-                      />
+                      >
+                        <span
+                          style={{
+                            ...styles.tagDot,
+                            background:
+                              tag.color,
+                          }}
+                        />
 
-                      {tag.nombre}
+                        {tag.nombre}
 
-                      {rol === "ADMIN" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            quitarTag(tag.id)
-                          }
-                          style={styles.removeTag}
-                          title="Quitar tag"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </span>
-                  ))}
+                        {rol ===
+                          "ADMIN" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              quitarTag(
+                                tag.id
+                              )
+                            }
+                            style={
+                              styles.removeTag
+                            }
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
+                    )
+                  )}
                 </div>
               )}
 
               {rol === "ADMIN" && (
                 <>
-                  <div style={styles.tagDivider} />
+                  <div
+                    style={
+                      styles.tagDivider
+                    }
+                  />
 
-                  <label style={styles.fieldLabel}>
+                  <label
+                    style={
+                      styles.fieldLabel
+                    }
+                  >
                     Añadir tag existente
                   </label>
 
                   <select
                     value=""
                     onChange={(e) =>
-                      seleccionarTag(e.target.value)
+                      seleccionarTag(
+                        e.target.value
+                      )
                     }
                     style={styles.input}
                   >
@@ -1572,8 +2083,11 @@ export default function TicketPage() {
                       .filter(
                         (tag) =>
                           !tagsTicket.some(
-                            (asignado) =>
-                              asignado.id === tag.id
+                            (
+                              asignado
+                            ) =>
+                              asignado.id ===
+                              tag.id
                           )
                       )
                       .map((tag) => (
@@ -1586,13 +2100,23 @@ export default function TicketPage() {
                       ))}
                   </select>
 
-                  <div style={styles.newTagArea}>
-                    <label style={styles.fieldLabel}>
+                  <div
+                    style={
+                      styles.newTagArea
+                    }
+                  >
+                    <label
+                      style={
+                        styles.fieldLabel
+                      }
+                    >
                       Crear nuevo tag
                     </label>
 
                     <input
-                      value={nuevoTagNombre}
+                      value={
+                        nuevoTagNombre
+                      }
                       onChange={(e) =>
                         setNuevoTagNombre(
                           e.target.value
@@ -1602,94 +2126,111 @@ export default function TicketPage() {
                       style={styles.input}
                     />
 
-                    <div style={styles.colorRow}>
+                    <div
+                      style={
+                        styles.colorRow
+                      }
+                    >
                       <input
                         type="color"
-                        value={nuevoTagColor}
+                        value={
+                          nuevoTagColor
+                        }
                         onChange={(e) =>
                           setNuevoTagColor(
-                            e.target.value
+                            e.target
+                              .value
                           )
                         }
-                        style={styles.colorInput}
+                        style={
+                          styles.colorInput
+                        }
                       />
 
                       <button
                         type="button"
-                        onClick={crearTag}
-                        disabled={!nuevoTagNombre.trim()}
+                        onClick={async () => {
+                          try {
+                            await crearTag();
+                          } catch (
+                            err: any
+                          ) {
+                            setError(
+                              err?.message ??
+                                "No se ha podido crear el tag."
+                            );
+                          }
+                        }}
+                        disabled={
+                          !nuevoTagNombre.trim()
+                        }
                         style={{
                           ...styles.createTagButton,
-                          opacity: nuevoTagNombre.trim()
-                            ? 1
-                            : 0.55,
+                          opacity:
+                            nuevoTagNombre.trim()
+                              ? 1
+                              : 0.5,
                         }}
                       >
                         + Crear y añadir
                       </button>
                     </div>
                   </div>
+
+                  <p
+                    style={
+                      styles.editHint
+                    }
+                  >
+                    Los cambios de tags se
+                    aplicarán al pulsar
+                    Guardar cambios.
+                  </p>
                 </>
               )}
             </section>
 
-            {/* GUARDADO ADMIN */}
-
-            {rol === "ADMIN" && (
-              <div style={styles.adminSaveArea}>
-                <button
-                  type="button"
-                  onClick={guardarCambiosAdmin}
-                  disabled={guardando || !hayCambiosAdmin}
-                  style={{
-                    ...styles.adminSaveButton,
-                    opacity:
-                      guardando || !hayCambiosAdmin
-                        ? 0.55
-                        : 1,
-                  }}
-                >
-                  <SaveIcon />
-
-                  {guardando
-                    ? "Guardando..."
-                    : "Guardar cambios"}
-                </button>
-
-                {mensajeGuardado && (
-                  <span style={styles.savedMessage}>
-                    <CheckIcon />
-                    {mensajeGuardado}
-                  </span>
-                )}
-              </div>
-            )}
-
             {/* INFO */}
 
-            <section style={styles.infoCard}>
-              <div style={styles.infoRow}>
+            <section
+              style={styles.infoCard}
+            >
+              <div
+                style={styles.infoRow}
+              >
                 <span>Creado</span>
 
                 <strong>
-                  {formatearFecha(ticket.creado_en)}
+                  {formatearFecha(
+                    ticket.creado_en
+                  )}
                 </strong>
               </div>
 
-              <div style={styles.infoRow}>
-                <span>Última actualización</span>
+              <div
+                style={styles.infoRow}
+              >
+                <span>
+                  Última actualización
+                </span>
 
                 <strong>
-                  {formatearFecha(ticket.actualizado_en)}
+                  {formatearFecha(
+                    ticket.actualizado_en
+                  )}
                 </strong>
               </div>
 
               {ticket.resuelto_en && (
-                <div style={styles.infoRow}>
+                <div
+                  style={styles.infoRow}
+                >
                   <span>Resuelto</span>
 
                   <strong>
-                    {formatearFecha(ticket.resuelto_en)}
+                    {formatearFecha(
+                      ticket.resuelto_en
+                    )}
                   </strong>
                 </div>
               )}
@@ -1703,11 +2244,15 @@ export default function TicketPage() {
       {imagenAmpliada && (
         <div
           style={styles.imageModal}
-          onClick={() => setImagenAmpliada(null)}
+          onClick={() =>
+            setImagenAmpliada(null)
+          }
         >
           <button
             type="button"
-            onClick={() => setImagenAmpliada(null)}
+            onClick={() =>
+              setImagenAmpliada(null)
+            }
             style={styles.modalClose}
           >
             ×
@@ -1717,7 +2262,9 @@ export default function TicketPage() {
             src={imagenAmpliada}
             alt="Imagen adjunta"
             style={styles.modalImage}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) =>
+              e.stopPropagation()
+            }
           />
         </div>
       )}
@@ -1743,23 +2290,34 @@ function Header({
       <div style={styles.headerInner}>
         <div style={styles.brand}>
           <div style={styles.logoIcon}>
-            <SupportIcon color="#ffffff" />
+            <SupportIcon
+              color="#ffffff"
+            />
           </div>
 
           <div>
-            <div style={styles.brandTitle}>
+            <div
+              style={styles.brandTitle}
+            >
               IT Support
             </div>
 
-            <div style={styles.brandSubtitle}>
-              Gestión de incidencias informáticas
+            <div
+              style={
+                styles.brandSubtitle
+              }
+            >
+              Gestión de incidencias
+              informáticas
             </div>
           </div>
         </div>
 
         <div style={styles.userArea}>
           <div style={styles.userInfo}>
-            <span style={styles.userEmail}>
+            <span
+              style={styles.userEmail}
+            >
               {email}
             </span>
 
@@ -1814,6 +2372,7 @@ function PriorityBadge({
       border: "#b9dfd5",
       dot: "#4cab91",
     },
+
     MEDIA: {
       label: "Media",
       background: "#fff7e6",
@@ -1821,6 +2380,7 @@ function PriorityBadge({
       border: "#ead49c",
       dot: "#e7ad2f",
     },
+
     ALTA: {
       label: "Alta",
       background: "#fff0e9",
@@ -1828,6 +2388,7 @@ function PriorityBadge({
       border: "#efc2ab",
       dot: "#e77a3d",
     },
+
     URGENTE: {
       label: "Urgente",
       background: "#fff0f0",
@@ -1837,21 +2398,25 @@ function PriorityBadge({
     },
   };
 
-  const current = config[importancia];
+  const current =
+    config[importancia];
 
   return (
     <span
       style={{
         ...styles.badge,
-        background: current.background,
+        background:
+          current.background,
         color: current.color,
-        borderColor: current.border,
+        borderColor:
+          current.border,
       }}
     >
       <span
         style={{
           ...styles.badgeDot,
-          background: current.dot,
+          background:
+            current.dot,
         }}
       />
 
@@ -1873,6 +2438,7 @@ function StatusBadge({
       border: "#e8bd72",
       dot: "#d99525",
     },
+
     EN_CURSO: {
       label: "En curso",
       background: "#edf6ff",
@@ -1880,6 +2446,7 @@ function StatusBadge({
       border: "#9dcaf3",
       dot: "#2374c6",
     },
+
     RESUELTO: {
       label: "Resuelto",
       background: "#edf9f6",
@@ -1895,15 +2462,18 @@ function StatusBadge({
     <span
       style={{
         ...styles.badge,
-        background: current.background,
+        background:
+          current.background,
         color: current.color,
-        borderColor: current.border,
+        borderColor:
+          current.border,
       }}
     >
       <span
         style={{
           ...styles.badgeDot,
-          background: current.dot,
+          background:
+            current.dot,
         }}
       />
 
@@ -1976,14 +2546,19 @@ function getImportanciaStyle(
   };
 }
 
-function formatearFecha(fecha: string) {
-  return new Intl.DateTimeFormat("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(fecha));
+function formatearFecha(
+  fecha: string
+) {
+  return new Intl.DateTimeFormat(
+    "es-ES",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  ).format(new Date(fecha));
 }
 
 /* =========================================================
@@ -2026,7 +2601,11 @@ function UserSmallIcon() {
       stroke="currentColor"
       strokeWidth="2"
     >
-      <circle cx="12" cy="8" r="4" />
+      <circle
+        cx="12"
+        cy="8"
+        r="4"
+      />
       <path d="M5 21a7 7 0 0 1 14 0" />
     </svg>
   );
@@ -2034,7 +2613,14 @@ function UserSmallIcon() {
 
 function ArrowLeftIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="m15 18-6-6 6-6" />
     </svg>
   );
@@ -2042,8 +2628,19 @@ function ArrowLeftIcon() {
 
 function UserIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="8" r="4" />
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle
+        cx="12"
+        cy="8"
+        r="4"
+      />
       <path d="M4 21a8 8 0 0 1 16 0" />
     </svg>
   );
@@ -2051,7 +2648,14 @@ function UserIcon() {
 
 function IncidentIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
       <path d="M14 2v6h6" />
       <path d="M8 13h8" />
@@ -2062,7 +2666,14 @@ function IncidentIcon() {
 
 function ConversationIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" />
     </svg>
   );
@@ -2070,35 +2681,61 @@ function ConversationIcon() {
 
 function TagIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="M20 13 11 22l-9-9V4a2 2 0 0 1 2-2h9Z" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
+      <circle
+        cx="8.5"
+        cy="8.5"
+        r="1.5"
+      />
     </svg>
   );
 }
 
 function TicketIcon() {
   return (
-    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#00AF9A" strokeWidth="1.8">
+    <svg
+      width="27"
+      height="27"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#00AF9A"
+      strokeWidth="1.8"
+    >
       <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-    </svg>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="m22 2-7 20-4-9-9-4Z" />
-      <path d="M22 2 11 13" />
     </svg>
   );
 }
 
 function ImageIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect
+        x="3"
+        y="3"
+        width="18"
+        height="18"
+        rx="2"
+      />
+      <circle
+        cx="8.5"
+        cy="8.5"
+        r="1.5"
+      />
       <path d="m21 15-5-5L5 21" />
     </svg>
   );
@@ -2106,7 +2743,14 @@ function ImageIcon() {
 
 function SaveIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
       <path d="M17 21v-8H7v8" />
       <path d="M7 3v5h8" />
@@ -2116,8 +2760,19 @@ function SaveIcon() {
 
 function CheckIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-      <circle cx="12" cy="12" r="9" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
       <path d="m8 12 2.5 2.5L16 9" />
     </svg>
   );
@@ -2125,8 +2780,19 @@ function CheckIcon() {
 
 function AlertIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="9" />
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
       <path d="M12 8v5" />
       <path d="M12 16h.01" />
     </svg>
@@ -2135,7 +2801,14 @@ function AlertIcon() {
 
 function LogoutIcon() {
   return (
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="M10 17l5-5-5-5" />
       <path d="M15 12H3" />
       <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
@@ -2147,12 +2820,16 @@ function LogoutIcon() {
    ESTILOS
 ========================================================= */
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: "100vh",
     background: "#f5f7f7",
     color: "#202424",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
   },
 
   loading: {
@@ -2163,7 +2840,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "14px",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
   },
 
   loadingIcon: {
@@ -2184,7 +2862,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   header: {
     background: "#ffffff",
-    borderBottom: "1px solid #e8ecec",
+    borderBottom:
+      "1px solid #e8ecec",
   },
 
   headerInner: {
@@ -2194,7 +2873,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "0 30px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
   },
 
   brand: {
@@ -2251,7 +2931,8 @@ const styles: Record<string, React.CSSProperties> = {
   logout: {
     width: "38px",
     height: "38px",
-    border: "1px solid #dfe4e4",
+    border:
+      "1px solid #dfe4e4",
     borderRadius: "9px",
     background: "#ffffff",
     color: "#555d5d",
@@ -2277,7 +2958,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: "6px",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     cursor: "pointer",
   },
@@ -2285,7 +2967,8 @@ const styles: Record<string, React.CSSProperties> = {
   ticketHeader: {
     display: "flex",
     alignItems: "flex-end",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "30px",
     marginBottom: "24px",
   },
@@ -2345,7 +3028,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "8px",
     padding: "0 10px",
     outline: "none",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "10px",
     fontWeight: 600,
     cursor: "pointer",
@@ -2369,7 +3053,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   card: {
     background: "#ffffff",
-    border: "1px solid #e5e9e9",
+    border:
+      "1px solid #e5e9e9",
     borderRadius: "14px",
     padding: "23px",
     marginBottom: "20px",
@@ -2381,7 +3066,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "12px",
     paddingBottom: "18px",
     marginBottom: "20px",
-    borderBottom: "1px solid #edf0f0",
+    borderBottom:
+      "1px solid #edf0f0",
   },
 
   cardHeadingCompact: {
@@ -2390,7 +3076,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "11px",
     paddingBottom: "17px",
     marginBottom: "18px",
-    borderBottom: "1px solid #edf0f0",
+    borderBottom:
+      "1px solid #edf0f0",
   },
 
   sectionIcon: {
@@ -2437,7 +3124,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   descriptionBox: {
     background: "#f8fafa",
-    border: "1px solid #edf0f0",
+    border:
+      "1px solid #edf0f0",
     borderRadius: "9px",
     padding: "15px",
     color: "#4f5656",
@@ -2456,13 +3144,15 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     height: "40px",
     boxSizing: "border-box",
-    border: "1px solid #d9dede",
+    border:
+      "1px solid #d9dede",
     borderRadius: "8px",
     padding: "0 11px",
     background: "#ffffff",
     color: "#303535",
     outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "11px",
   },
 
@@ -2470,6 +3160,14 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#f7f9f9",
     color: "#717979",
     cursor: "default",
+  },
+
+  editHint: {
+    margin:
+      "2px 0 0 0",
+    color: "#939a9a",
+    fontSize: "8px",
+    lineHeight: 1.5,
   },
 
   badge: {
@@ -2501,7 +3199,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: "8px",
     background: "#fff1f1",
-    border: "1px solid #f0cece",
+    border:
+      "1px solid #f0cece",
     color: "#a63d3d",
     fontSize: "10px",
   },
@@ -2553,7 +3252,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   timelineHeader: {
     display: "flex",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "15px",
     marginBottom: "5px",
   },
@@ -2589,7 +3289,8 @@ const styles: Record<string, React.CSSProperties> = {
     height: "82px",
     padding: 0,
     overflow: "hidden",
-    border: "1px solid #e1e6e6",
+    border:
+      "1px solid #e1e6e6",
     borderRadius: "8px",
     background: "#f5f7f7",
     cursor: "pointer",
@@ -2604,7 +3305,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   followUpComposer: {
     paddingTop: "20px",
-    borderTop: "1px solid #edf0f0",
+    borderTop:
+      "1px solid #edf0f0",
   },
 
   textarea: {
@@ -2612,11 +3314,13 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "105px",
     resize: "vertical",
     boxSizing: "border-box",
-    border: "1px solid #d9dede",
+    border:
+      "1px solid #d9dede",
     borderRadius: "8px",
     padding: "12px",
     outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     lineHeight: 1.6,
   },
@@ -2634,7 +3338,8 @@ const styles: Record<string, React.CSSProperties> = {
     position: "relative",
     borderRadius: "8px",
     overflow: "hidden",
-    border: "1px solid #e1e6e6",
+    border:
+      "1px solid #e1e6e6",
   },
 
   previewImage: {
@@ -2652,15 +3357,16 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 0,
     border: "none",
     borderRadius: "50%",
-    background: "rgba(0,0,0,0.65)",
+    background:
+      "rgba(0,0,0,0.65)",
     color: "#ffffff",
-    lineHeight: "20px",
     cursor: "pointer",
   },
 
   composerFooter: {
     display: "flex",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     alignItems: "center",
     gap: "15px",
     marginTop: "11px",
@@ -2674,9 +3380,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   attachButton: {
-    height: "34px",
+    height: "36px",
     padding: "0 11px",
-    border: "1px solid #d7dddd",
+    border:
+      "1px solid #d7dddd",
     borderRadius: "8px",
     background: "#ffffff",
     color: "#566060",
@@ -2693,20 +3400,38 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "8px",
   },
 
-  sendButton: {
-    height: "38px",
-    padding: "0 14px",
+  saveRight: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: "11px",
+    flexWrap: "wrap",
+  },
+
+  saveButton: {
+    height: "40px",
+    padding: "0 15px",
     border: "none",
     borderRadius: "8px",
     background: "#00AF9A",
     color: "#ffffff",
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: "7px",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "10px",
     fontWeight: 600,
-    cursor: "pointer",
+  },
+
+  savedMessage: {
+    color: "#13806c",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "9px",
+    fontWeight: 600,
   },
 
   tagsContainer: {
@@ -2762,7 +3487,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   colorRow: {
     display: "grid",
-    gridTemplateColumns: "46px 1fr",
+    gridTemplateColumns:
+      "46px 1fr",
     gap: "8px",
     marginTop: "8px",
   },
@@ -2771,7 +3497,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: "46px",
     height: "38px",
     padding: "3px",
-    border: "1px solid #d9dede",
+    border:
+      "1px solid #d9dede",
     borderRadius: "8px",
     background: "#ffffff",
     cursor: "pointer",
@@ -2779,82 +3506,34 @@ const styles: Record<string, React.CSSProperties> = {
 
   createTagButton: {
     height: "38px",
-    border: "1px solid #00AF9A",
+    border:
+      "1px solid #00AF9A",
     borderRadius: "8px",
     background: "#ffffff",
     color: "#008f7e",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "10px",
     fontWeight: 600,
     cursor: "pointer",
-  },
-
-  saveArea: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    flexWrap: "wrap",
-  },
-
-  saveButton: {
-    height: "40px",
-    padding: "0 15px",
-    border: "none",
-    borderRadius: "8px",
-    background: "#00AF9A",
-    color: "#ffffff",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-
-  adminSaveArea: {
-    display: "flex",
-    alignItems: "center",
-    gap: "11px",
-    flexWrap: "wrap",
-    marginBottom: "20px",
-  },
-
-  adminSaveButton: {
-    height: "42px",
-    padding: "0 16px",
-    border: "none",
-    borderRadius: "9px",
-    background: "#00AF9A",
-    color: "#ffffff",
-    display: "flex",
-    alignItems: "center",
-    gap: "7px",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-
-  savedMessage: {
-    color: "#13806c",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "5px",
-    fontSize: "9px",
-    fontWeight: 600,
   },
 
   infoCard: {
     background: "#ffffff",
-    border: "1px solid #e5e9e9",
+    border:
+      "1px solid #e5e9e9",
     borderRadius: "14px",
     padding: "18px 20px",
   },
 
   infoRow: {
     display: "flex",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "15px",
     padding: "9px 0",
-    borderBottom: "1px solid #f0f2f2",
+    borderBottom:
+      "1px solid #f0f2f2",
     color: "#858d8d",
     fontSize: "9px",
   },
@@ -2863,7 +3542,8 @@ const styles: Record<string, React.CSSProperties> = {
     position: "fixed",
     inset: 0,
     zIndex: 9999,
-    background: "rgba(16, 20, 20, 0.82)",
+    background:
+      "rgba(16,20,20,0.82)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -2884,9 +3564,11 @@ const styles: Record<string, React.CSSProperties> = {
     right: "28px",
     width: "38px",
     height: "38px",
-    border: "1px solid rgba(255,255,255,0.3)",
+    border:
+      "1px solid rgba(255,255,255,0.3)",
     borderRadius: "50%",
-    background: "rgba(0,0,0,0.25)",
+    background:
+      "rgba(0,0,0,0.25)",
     color: "#ffffff",
     fontSize: "24px",
     cursor: "pointer",
