@@ -30,7 +30,7 @@ export default function LoginPage() {
       return;
     }
 
-    // Comprobar que el usuario tiene acceso a IT Tickets
+    // Comprobar acceso específico a IT Tickets
     const { data: acceso, error: accesoError } = await supabase
       .from("it_usuarios")
       .select("rol, activo")
@@ -107,6 +107,7 @@ export default function LoginPage() {
         <h1
           style={{
             margin: "0 0 7px",
+            fontFamily: "'Poppins', Arial, sans-serif",
             fontSize: "26px",
             fontWeight: 700,
             color: "#202424",
@@ -118,6 +119,7 @@ export default function LoginPage() {
         <p
           style={{
             margin: "0 0 30px",
+            fontFamily: "'Poppins', Arial, sans-serif",
             color: "#7b8282",
             fontSize: "14px",
           }}
@@ -130,6 +132,7 @@ export default function LoginPage() {
             style={{
               display: "block",
               marginBottom: "8px",
+              fontFamily: "'Poppins', Arial, sans-serif",
               color: "#343838",
               fontSize: "13px",
               fontWeight: 600,
@@ -153,6 +156,7 @@ export default function LoginPage() {
               border: "1px solid #dfe4e4",
               borderRadius: "9px",
               outlineColor: "#00AF9A",
+              fontFamily: "'Poppins', Arial, sans-serif",
               fontSize: "14px",
             }}
           />
@@ -161,6 +165,7 @@ export default function LoginPage() {
             style={{
               display: "block",
               marginBottom: "8px",
+              fontFamily: "'Poppins', Arial, sans-serif",
               color: "#343838",
               fontSize: "13px",
               fontWeight: 600,
@@ -184,6 +189,7 @@ export default function LoginPage() {
               border: "1px solid #dfe4e4",
               borderRadius: "9px",
               outlineColor: "#00AF9A",
+              fontFamily: "'Poppins', Arial, sans-serif",
               fontSize: "14px",
             }}
           />
@@ -196,7 +202,9 @@ export default function LoginPage() {
                 background: "#fff2f2",
                 color: "#b42318",
                 borderRadius: "8px",
+                fontFamily: "'Poppins', Arial, sans-serif",
                 fontSize: "13px",
+                lineHeight: "1.5",
               }}
             >
               {error}
@@ -213,6 +221,7 @@ export default function LoginPage() {
               borderRadius: "9px",
               background: "#00AF9A",
               color: "#ffffff",
+              fontFamily: "'Poppins', Arial, sans-serif",
               fontSize: "13px",
               fontWeight: 700,
               cursor: loading ? "default" : "pointer",
