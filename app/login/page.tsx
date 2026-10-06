@@ -18,36 +18,62 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    // 1. LOGIN
     const { data, error: loginError } =
       await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-    if (loginError || !data.user) {
-      setError("Correo electrónico o contraseña incorrectos.");
+    if (loginError) {
+      setError("ERROR LOGIN: " + loginError.message);
       setLoading(false);
       return;
     }
 
-    // Comprobar acceso específico a IT Tickets
+    if (!data.user) {
+      setError("ERROR: Supabase no ha devuelto ningún usuario.");
+      setLoading(false);
+      return;
+    }
+
+    // 2. COMPROBAR ACCESO A IT TICKETS
     const { data: acceso, error: accesoError } = await supabase
       .from("it_usuarios")
-      .select("rol, activo")
+      .select("user_id, rol, activo")
       .eq("user_id", data.user.id)
       .maybeSingle();
 
-    if (accesoError || !acceso || !acceso.activo) {
-      await supabase.auth.signOut();
-
+    // Mostrar temporalmente el error REAL
+    if (accesoError) {
       setError(
-        "Tu usuario no tiene acceso al sistema de incidencias informáticas."
+        "ERROR ACCESO: " +
+          accesoError.message +
+          " | Código: " +
+          accesoError.code
       );
 
       setLoading(false);
       return;
     }
 
+    if (!acceso) {
+      setError(
+        "ERROR: Login correcto, pero Supabase no encuentra este UID en it_usuarios. UID: " +
+          data.user.id
+      );
+
+      setLoading(false);
+      return;
+    }
+
+    if (!acceso.activo) {
+      setError("ERROR: El usuario existe en it_usuarios pero está inactivo.");
+      setLoading(false);
+      return;
+    }
+
+    // 3. TODO CORRECTO
     router.push("/");
     router.refresh();
   }
@@ -74,7 +100,6 @@ export default function LoginPage() {
           boxShadow: "0 10px 35px rgba(0,0,0,0.07)",
         }}
       >
-        {/* ICONO SUPPORT */}
         <div
           style={{
             width: "62px",
@@ -198,13 +223,14 @@ export default function LoginPage() {
             <div
               style={{
                 marginBottom: "18px",
-                padding: "11px 13px",
+                padding: "12px 14px",
                 background: "#fff2f2",
                 color: "#b42318",
                 borderRadius: "8px",
                 fontFamily: "'Poppins', Arial, sans-serif",
-                fontSize: "13px",
+                fontSize: "12px",
                 lineHeight: "1.5",
+                wordBreak: "break-word",
               }}
             >
               {error}
