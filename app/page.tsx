@@ -1,38 +1,4 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase";
-
-export default function LoginPage() {
-  const router = useRouter();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-
-    setLoading(true);
-    setError("");
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setError("Correo electrónico o contraseña incorrectos.");
-      setLoading(false);
-      return;
-    }
-
-    router.push("/");
-    router.refresh();
-  }
-
+export default function Home() {
   return (
     <main
       style={{
@@ -48,14 +14,14 @@ export default function LoginPage() {
       <div
         style={{
           width: "100%",
-          maxWidth: "420px",
+          maxWidth: "600px",
           background: "#ffffff",
           borderRadius: "18px",
           padding: "42px",
           boxShadow: "0 10px 35px rgba(0,0,0,0.07)",
+          textAlign: "center",
         }}
       >
-        {/* ICONO SUPPORT */}
         <div
           style={{
             width: "62px",
@@ -65,7 +31,7 @@ export default function LoginPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            marginBottom: "28px",
+            margin: "0 auto 24px",
           }}
         >
           <svg
@@ -87,9 +53,9 @@ export default function LoginPage() {
 
         <h1
           style={{
-            fontSize: "26px",
+            margin: "0 0 8px",
+            fontSize: "28px",
             fontWeight: 700,
-            margin: "0 0 7px",
             color: "#202424",
           }}
         >
@@ -98,111 +64,13 @@ export default function LoginPage() {
 
         <p
           style={{
-            color: "#7b8282",
-            margin: "0 0 30px",
+            margin: 0,
             fontSize: "14px",
+            color: "#7b8282",
           }}
         >
-          Accede al sistema de incidencias informáticas
+          Sistema de gestión de incidencias informáticas
         </p>
-
-        <form onSubmit={handleLogin}>
-          <label
-            style={{
-              display: "block",
-              fontWeight: 600,
-              fontSize: "13px",
-              color: "#343838",
-              marginBottom: "8px",
-            }}
-          >
-            Correo electrónico
-          </label>
-
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="nombre@empresa.com"
-            autoComplete="email"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "13px 14px",
-              border: "1px solid #dfe4e4",
-              borderRadius: "9px",
-              fontSize: "14px",
-              marginBottom: "20px",
-              outlineColor: "#00AF9A",
-            }}
-          />
-
-          <label
-            style={{
-              display: "block",
-              fontWeight: 600,
-              fontSize: "13px",
-              color: "#343838",
-              marginBottom: "8px",
-            }}
-          >
-            Contraseña
-          </label>
-
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            placeholder="••••••••"
-            autoComplete="current-password"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "13px 14px",
-              border: "1px solid #dfe4e4",
-              borderRadius: "9px",
-              fontSize: "14px",
-              marginBottom: "18px",
-              outlineColor: "#00AF9A",
-            }}
-          />
-
-          {error && (
-            <div
-              style={{
-                background: "#fff2f2",
-                color: "#b42318",
-                padding: "11px 13px",
-                borderRadius: "8px",
-                fontSize: "13px",
-                marginBottom: "18px",
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              border: "none",
-              background: "#00AF9A",
-              color: "#ffffff",
-              borderRadius: "9px",
-              padding: "14px",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: loading ? "default" : "pointer",
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? "ACCEDIENDO..." : "INICIAR SESIÓN"}
-          </button>
-        </form>
       </div>
     </main>
   );
