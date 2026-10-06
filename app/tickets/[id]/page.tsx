@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  ChangeEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
@@ -34,10 +39,28 @@ type Seguimiento = {
   creado_en: string;
 };
 
+type ArchivoSeguimiento = {
+  id: string;
+  seguimiento_id: string;
+  ticket_id: string;
+  nombre_archivo: string;
+  ruta_storage: string;
+  tipo_mime: string | null;
+  tamano: number | null;
+  creado_por: string;
+  creado_en: string;
+  url?: string;
+};
+
 type Tag = {
   id: string;
   nombre: string;
   color: string;
+};
+
+type ImagenPendiente = {
+  file: File;
+  preview: string;
 };
 
 export default function TicketPage() {
@@ -57,27 +80,57 @@ export default function TicketPage() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
 
+  // Datos de contacto
   const [nombre, setNombre] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
 
+  // Cambios ADMIN
+  const [estadoEditado, setEstadoEditado] =
+    useState<Estado>("PENDIENTE");
+
+  const [importanciaEditada, setImportanciaEditada] =
+    useState<Importancia>("BAJA");
+
+  // Seguimientos
   const [seguimientos, setSeguimientos] = useState<Seguimiento[]>(
     []
   );
 
+  const [archivos, setArchivos] = useState<
+    ArchivoSeguimiento[]
+  >([]);
+
   const [nuevoSeguimiento, setNuevoSeguimiento] = useState("");
 
+  const [imagenesPendientes, setImagenesPendientes] = useState<
+    ImagenPendiente[]
+  >([]);
+
+  const [imagenAmpliada, setImagenAmpliada] = useState<
+    string | null
+  >(null);
+
+  // Tags
   const [tags, setTags] = useState<Tag[]>([]);
+
+  const [tagsTicketOriginales, setTagsTicketOriginales] =
+    useState<Tag[]>([]);
+
   const [tagsTicket, setTagsTicket] = useState<Tag[]>([]);
 
   const [nuevoTagNombre, setNuevoTagNombre] = useState("");
-  const [nuevoTagColor, setNuevoTagColor] = useState("#00AF9A");
+  const [nuevoTagColor, setNuevoTagColor] =
+    useState("#00AF9A");
 
-  const [mensaje, setMensaje] = useState("");
-  const [tipoMensaje, setTipoMensaje] = useState<
-    "OK" | "ERROR" | ""
-  >("");
+  // Mensajes
+  const [error, setError] = useState("");
+  const [mensajeGuardado, setMensajeGuardado] = useState("");
+
+  /* =========================================================
+     CARGA
+  ========================================================= */
 
   useEffect(() => {
     if (ticketId) {
@@ -85,10 +138,18 @@ export default function TicketPage() {
     }
   }, [ticketId]);
 
+  useEffect(() => {
+    return () => {
+      imagenesPendientes.forEach((imagen) => {
+        URL.revokeObjectURL(imagen.preview);
+      });
+    };
+  }, [imagenesPendientes]);
+
   async function cargarPagina() {
     setLoading(true);
-    setMensaje("");
-    setTipoMensaje("");
+    setError("");
+    setMensajeGuardado("");
 
     const {
       data: { user },
@@ -105,11 +166,7 @@ export default function TicketPage() {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (
-      accesoError ||
-      !acceso ||
-      !acceso.activo
-    ) {
+    if (accesoError || !acceso || !acceso.activo) {
       await supabase.auth.signOut();
       router.replace("/login");
       return;
@@ -124,8 +181,7 @@ export default function TicketPage() {
     const { data: ticketData, error: ticketError } =
       await supabase
         .from("it_tickets")
-        .select(
-          `
+        .select(`
           id,
           numero,
           creado_por,
@@ -141,14 +197,12 @@ export default function TicketPage() {
           actualizado_en,
           resuelto_en,
           resuelto_por
-        `
-        )
+        `)
         .eq("id", ticketId)
         .maybeSingle();
 
     if (ticketError || !ticketData) {
       console.error(ticketError);
-
       setTicket(null);
       setLoading(false);
       return;
@@ -163,6 +217,9 @@ export default function TicketPage() {
     setEmail(ticketActual.email ?? "");
     setTelefono(ticketActual.telefono ?? "");
 
+    setEstadoEditado(ticketActual.estado);
+    setImportanciaEditada(ticketActual.importancia);
+
     await Promise.all([
       cargarSeguimientos(),
       cargarTags(rolUsuario),
@@ -171,64 +228,114 @@ export default function TicketPage() {
     setLoading(false);
   }
 
+  /* =========================================================
+     SEGUIMIENTOS
+  ========================================================= */
+
   async function cargarSeguimientos() {
-    const { data, error } = await supabase
+    const { data, error: seguimientoError } = await supabase
       .from("it_seguimientos")
-      .select(
-        `
+      .select(`
         id,
         ticket_id,
         creado_por,
         mensaje,
         creado_en
-      `
-      )
+      `)
       .eq("ticket_id", ticketId)
       .order("creado_en", {
         ascending: true,
       });
 
-    if (error) {
-      console.error(
-        "Error cargando seguimientos:",
-        error
-      );
+    if (seguimientoError) {
+      console.error(seguimientoError);
       return;
     }
 
     setSeguimientos((data ?? []) as Seguimiento[]);
+
+    await cargarArchivosSeguimiento();
   }
+
+  async function cargarArchivosSeguimiento() {
+    const { data, error: archivosError } = await supabase
+      .from("it_seguimiento_archivos")
+      .select(`
+        id,
+        seguimiento_id,
+        ticket_id,
+        nombre_archivo,
+        ruta_storage,
+        tipo_mime,
+        tamano,
+        creado_por,
+        creado_en
+      `)
+      .eq("ticket_id", ticketId)
+      .order("creado_en", {
+        ascending: true,
+      });
+
+    if (archivosError) {
+      console.error(archivosError);
+      return;
+    }
+
+    const lista = (data ?? []) as ArchivoSeguimiento[];
+
+    const listaConUrls = await Promise.all(
+      lista.map(async (archivo) => {
+        const { data: signedData } = await supabase.storage
+          .from("it-tickets")
+          .createSignedUrl(archivo.ruta_storage, 60 * 60);
+
+        return {
+          ...archivo,
+          url: signedData?.signedUrl,
+        };
+      })
+    );
+
+    setArchivos(listaConUrls);
+  }
+
+  /* =========================================================
+     TAGS
+  ========================================================= */
 
   async function cargarTags(rolUsuario: Rol) {
     const { data: relaciones, error: relacionesError } =
       await supabase
         .from("it_ticket_tags")
-        .select(
-          `
+        .select(`
           tag_id,
           it_tags (
             id,
             nombre,
             color
           )
-        `
-        )
+        `)
         .eq("ticket_id", ticketId);
 
     if (!relacionesError && relaciones) {
       const asignados: Tag[] = [];
 
       relaciones.forEach((relacion: any) => {
-        if (relacion.it_tags) {
+        const tagData = Array.isArray(relacion.it_tags)
+          ? relacion.it_tags[0]
+          : relacion.it_tags;
+
+        if (tagData) {
           asignados.push({
-            id: relacion.it_tags.id,
-            nombre: relacion.it_tags.nombre,
-            color: relacion.it_tags.color,
+            id: tagData.id,
+            nombre: tagData.nombre,
+            color: tagData.color,
           });
         }
       });
 
       setTagsTicket(asignados);
+      setTagsTicketOriginales(asignados);
     }
 
     if (rolUsuario === "ADMIN") {
@@ -239,7 +346,7 @@ export default function TicketPage() {
           .order("nombre");
 
       if (tagsError) {
-        console.error("Error cargando tags:", tagsError);
+        console.error(tagsError);
         return;
       }
 
@@ -248,258 +355,248 @@ export default function TicketPage() {
   }
 
   /* =========================================================
-     DATOS DE CONTACTO
+     CAMBIOS PENDIENTES
+  ========================================================= */
+
+  const hayCambiosUsuario = useMemo(() => {
+    if (!ticket) return false;
+
+    return (
+      nombre.trim() !== (ticket.nombre ?? "") ||
+      empresa.trim() !== (ticket.empresa ?? "") ||
+      email.trim() !== (ticket.email ?? "") ||
+      telefono.trim() !== (ticket.telefono ?? "")
+    );
+  }, [ticket, nombre, empresa, email, telefono]);
+
+  const hayCambiosAdmin = useMemo(() => {
+    if (!ticket) return false;
+
+    const originales = [...tagsTicketOriginales]
+      .map((tag) => tag.id)
+      .sort()
+      .join(",");
+
+    const actuales = [...tagsTicket]
+      .map((tag) => tag.id)
+      .sort()
+      .join(",");
+
+    return (
+      estadoEditado !== ticket.estado ||
+      importanciaEditada !== ticket.importancia ||
+      originales !== actuales
+    );
+  }, [
+    ticket,
+    estadoEditado,
+    importanciaEditada,
+    tagsTicket,
+    tagsTicketOriginales,
+  ]);
+
+  /* =========================================================
+     GUARDAR USUARIO
   ========================================================= */
 
   async function guardarDatosContacto() {
-    if (!ticket) return;
+    if (!ticket || rol !== "USUARIO") return;
+
+    setError("");
+    setMensajeGuardado("");
 
     if (!nombre.trim() || !empresa.trim() || !email.trim()) {
-      mostrarError(
+      setError(
         "Nombre, empresa y correo electrónico son obligatorios."
       );
       return;
     }
 
     setGuardando(true);
-    limpiarMensaje();
 
-    const { error } = await supabase
+    const ahora = new Date().toISOString();
+
+    const { error: guardarError } = await supabase
       .from("it_tickets")
       .update({
         nombre: nombre.trim(),
         empresa: empresa.trim(),
         email: email.trim(),
         telefono: telefono.trim() || null,
-        actualizado_en: new Date().toISOString(),
-      })
-      .eq("id", ticket.id);
-
-    if (error) {
-      mostrarError(
-        `No se han podido guardar los datos: ${error.message}`
-      );
-
-      setGuardando(false);
-      return;
-    }
-
-    setTicket((actual) =>
-      actual
-        ? {
-            ...actual,
-            nombre: nombre.trim(),
-            empresa: empresa.trim(),
-            email: email.trim(),
-            telefono: telefono.trim() || null,
-          }
-        : actual
-    );
-
-    mostrarOk("Datos de contacto actualizados.");
-    setGuardando(false);
-  }
-
-  /* =========================================================
-     ESTADO - SOLO ADMIN
-  ========================================================= */
-
-  async function cambiarEstado(nuevoEstado: Estado) {
-    if (!ticket || rol !== "ADMIN") return;
-
-    limpiarMensaje();
-
-    const ahora = new Date().toISOString();
-
-    const cambios =
-      nuevoEstado === "RESUELTO"
-        ? {
-            estado: nuevoEstado,
-            actualizado_en: ahora,
-            resuelto_en: ahora,
-            resuelto_por: userId,
-          }
-        : {
-            estado: nuevoEstado,
-            actualizado_en: ahora,
-            resuelto_en: null,
-            resuelto_por: null,
-          };
-
-    const { error } = await supabase
-      .from("it_tickets")
-      .update(cambios)
-      .eq("id", ticket.id);
-
-    if (error) {
-      mostrarError(
-        `No se ha podido cambiar el estado: ${error.message}`
-      );
-      return;
-    }
-
-    setTicket({
-      ...ticket,
-      estado: nuevoEstado,
-      actualizado_en: ahora,
-      resuelto_en:
-        nuevoEstado === "RESUELTO" ? ahora : null,
-      resuelto_por:
-        nuevoEstado === "RESUELTO" ? userId : null,
-    });
-
-    mostrarOk("Estado actualizado.");
-  }
-
-  /* =========================================================
-     IMPORTANCIA - SOLO ADMIN
-  ========================================================= */
-
-  async function cambiarImportancia(
-    nuevaImportancia: Importancia
-  ) {
-    if (!ticket || rol !== "ADMIN") return;
-
-    limpiarMensaje();
-
-    const ahora = new Date().toISOString();
-
-    const { error } = await supabase
-      .from("it_tickets")
-      .update({
-        importancia: nuevaImportancia,
         actualizado_en: ahora,
       })
       .eq("id", ticket.id);
 
-    if (error) {
-      mostrarError(
-        `No se ha podido cambiar la importancia: ${error.message}`
+    if (guardarError) {
+      setError(
+        `No se han podido guardar los datos: ${guardarError.message}`
       );
+      setGuardando(false);
       return;
     }
 
     setTicket({
       ...ticket,
-      importancia: nuevaImportancia,
+      nombre: nombre.trim(),
+      empresa: empresa.trim(),
+      email: email.trim(),
+      telefono: telefono.trim() || null,
       actualizado_en: ahora,
     });
 
-    mostrarOk("Importancia actualizada.");
+    setMensajeGuardado("Información actualizada");
+    setGuardando(false);
   }
 
   /* =========================================================
-     SEGUIMIENTO
+     GUARDAR ADMIN
   ========================================================= */
 
-  async function enviarSeguimiento() {
-    if (!ticket || !nuevoSeguimiento.trim()) {
-      return;
-    }
+  async function guardarCambiosAdmin() {
+    if (!ticket || rol !== "ADMIN") return;
 
-    setEnviandoSeguimiento(true);
-    limpiarMensaje();
+    setError("");
+    setMensajeGuardado("");
+    setGuardando(true);
 
-    const { data, error } = await supabase
-      .from("it_seguimientos")
-      .insert({
-        ticket_id: ticket.id,
-        creado_por: userId,
-        mensaje: nuevoSeguimiento.trim(),
-      })
-      .select(
-        `
-        id,
-        ticket_id,
-        creado_por,
-        mensaje,
-        creado_en
-      `
-      )
-      .single();
+    try {
+      const ahora = new Date().toISOString();
 
-    if (error) {
-      mostrarError(
-        `No se ha podido añadir el seguimiento: ${error.message}`
+      const cambiosTicket: any = {
+        estado: estadoEditado,
+        importancia: importanciaEditada,
+        actualizado_en: ahora,
+      };
+
+      if (estadoEditado === "RESUELTO") {
+        cambiosTicket.resuelto_en =
+          ticket.estado === "RESUELTO" && ticket.resuelto_en
+            ? ticket.resuelto_en
+            : ahora;
+
+        cambiosTicket.resuelto_por =
+          ticket.estado === "RESUELTO" && ticket.resuelto_por
+            ? ticket.resuelto_por
+            : userId;
+      } else {
+        cambiosTicket.resuelto_en = null;
+        cambiosTicket.resuelto_por = null;
+      }
+
+      const { error: ticketError } = await supabase
+        .from("it_tickets")
+        .update(cambiosTicket)
+        .eq("id", ticket.id);
+
+      if (ticketError) {
+        throw ticketError;
+      }
+
+      const idsOriginales = tagsTicketOriginales.map(
+        (tag) => tag.id
       );
 
-      setEnviandoSeguimiento(false);
-      return;
+      const idsActuales = tagsTicket.map((tag) => tag.id);
+
+      const tagsParaAñadir = idsActuales.filter(
+        (id) => !idsOriginales.includes(id)
+      );
+
+      const tagsParaQuitar = idsOriginales.filter(
+        (id) => !idsActuales.includes(id)
+      );
+
+      if (tagsParaAñadir.length > 0) {
+        const relaciones = tagsParaAñadir.map((tagId) => ({
+          ticket_id: ticket.id,
+          tag_id: tagId,
+        }));
+
+        const { error: insertError } = await supabase
+          .from("it_ticket_tags")
+          .upsert(relaciones, {
+            onConflict: "ticket_id,tag_id",
+            ignoreDuplicates: true,
+          });
+
+        if (insertError) {
+          throw insertError;
+        }
+      }
+
+      if (tagsParaQuitar.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("it_ticket_tags")
+          .delete()
+          .eq("ticket_id", ticket.id)
+          .in("tag_id", tagsParaQuitar);
+
+        if (deleteError) {
+          throw deleteError;
+        }
+      }
+
+      setTicket({
+        ...ticket,
+        estado: estadoEditado,
+        importancia: importanciaEditada,
+        actualizado_en: ahora,
+        resuelto_en:
+          estadoEditado === "RESUELTO"
+            ? cambiosTicket.resuelto_en
+            : null,
+        resuelto_por:
+          estadoEditado === "RESUELTO"
+            ? cambiosTicket.resuelto_por
+            : null,
+      });
+
+      setTagsTicketOriginales([...tagsTicket]);
+
+      setMensajeGuardado("Ticket actualizado");
+    } catch (err: any) {
+      console.error(err);
+
+      setError(
+        `No se han podido guardar los cambios: ${
+          err?.message ?? "Error desconocido"
+        }`
+      );
+    } finally {
+      setGuardando(false);
     }
-
-    setSeguimientos((actuales) => [
-      ...actuales,
-      data as Seguimiento,
-    ]);
-
-    setNuevoSeguimiento("");
-    setEnviandoSeguimiento(false);
   }
 
   /* =========================================================
-     TAGS
+     TAGS EN MEMORIA
   ========================================================= */
 
-  async function asignarTag(tagId: string) {
-    if (!ticket || rol !== "ADMIN" || !tagId) return;
+  function seleccionarTag(tagId: string) {
+    if (rol !== "ADMIN" || !tagId) return;
 
-    const yaExiste = tagsTicket.some(
+    const existe = tagsTicket.some(
       (tag) => tag.id === tagId
     );
 
-    if (yaExiste) return;
+    if (existe) return;
 
-    limpiarMensaje();
+    const tag = tags.find((item) => item.id === tagId);
 
-    const { error } = await supabase
-      .from("it_ticket_tags")
-      .insert({
-        ticket_id: ticket.id,
-        tag_id: tagId,
-      });
+    if (!tag) return;
 
-    if (error) {
-      mostrarError(
-        `No se ha podido asignar el tag: ${error.message}`
-      );
-      return;
-    }
+    setTagsTicket((actuales) => [...actuales, tag]);
 
-    const tag = tags.find(
-      (item) => item.id === tagId
-    );
-
-    if (tag) {
-      setTagsTicket((actuales) => [
-        ...actuales,
-        tag,
-      ]);
-    }
+    setMensajeGuardado("");
   }
 
-  async function quitarTag(tagId: string) {
-    if (!ticket || rol !== "ADMIN") return;
-
-    limpiarMensaje();
-
-    const { error } = await supabase
-      .from("it_ticket_tags")
-      .delete()
-      .eq("ticket_id", ticket.id)
-      .eq("tag_id", tagId);
-
-    if (error) {
-      mostrarError(
-        `No se ha podido quitar el tag: ${error.message}`
-      );
-      return;
-    }
+  function quitarTag(tagId: string) {
+    if (rol !== "ADMIN") return;
 
     setTagsTicket((actuales) =>
-      actuales.filter(
-        (tag) => tag.id !== tagId
-      )
+      actuales.filter((tag) => tag.id !== tagId)
     );
+
+    setMensajeGuardado("");
   }
 
   async function crearTag() {
@@ -510,27 +607,41 @@ export default function TicketPage() {
       return;
     }
 
-    limpiarMensaje();
+    setError("");
+    setMensajeGuardado("");
 
-    const { data, error } = await supabase
+    const nombreNuevo = nuevoTagNombre
+      .trim()
+      .toUpperCase();
+
+    const tagExistente = tags.find(
+      (tag) =>
+        tag.nombre.toUpperCase() ===
+        nombreNuevo.toUpperCase()
+    );
+
+    if (tagExistente) {
+      seleccionarTag(tagExistente.id);
+      setNuevoTagNombre("");
+      return;
+    }
+
+    const { data, error: crearError } = await supabase
       .from("it_tags")
       .insert({
-        nombre: nuevoTagNombre
-          .trim()
-          .toUpperCase(),
+        nombre: nombreNuevo,
         color: nuevoTagColor,
         creado_por: userId,
       })
       .select("id, nombre, color")
       .single();
 
-    if (error) {
-      mostrarError(
-        error.code === "23505"
+    if (crearError) {
+      setError(
+        crearError.code === "23505"
           ? "Ya existe un tag con ese nombre."
-          : `No se ha podido crear el tag: ${error.message}`
+          : `No se ha podido crear el tag: ${crearError.message}`
       );
-
       return;
     }
 
@@ -542,29 +653,232 @@ export default function TicketPage() {
       )
     );
 
+    setTagsTicket((actuales) => [
+      ...actuales,
+      nuevoTag,
+    ]);
+
     setNuevoTagNombre("");
     setNuevoTagColor("#00AF9A");
-
-    await asignarTag(nuevoTag.id);
   }
 
   /* =========================================================
-     MENSAJES
+     IMÁGENES PENDIENTES
   ========================================================= */
 
-  function limpiarMensaje() {
-    setMensaje("");
-    setTipoMensaje("");
+  function seleccionarImagenes(
+    event: ChangeEvent<HTMLInputElement>
+  ) {
+    const seleccionadas = Array.from(
+      event.target.files ?? []
+    );
+
+    if (seleccionadas.length === 0) return;
+
+    setError("");
+
+    const permitidos = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    const invalidas = seleccionadas.filter(
+      (file) => !permitidos.includes(file.type)
+    );
+
+    if (invalidas.length > 0) {
+      setError(
+        "Solo se pueden adjuntar imágenes JPG, JPEG, PNG o WEBP."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    // 10 MB máximo por imagen
+    const demasiadoGrandes = seleccionadas.filter(
+      (file) => file.size > 10 * 1024 * 1024
+    );
+
+    if (demasiadoGrandes.length > 0) {
+      setError(
+        "Cada imagen puede tener un tamaño máximo de 10 MB."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    const nuevas = seleccionadas.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+
+    setImagenesPendientes((actuales) => [
+      ...actuales,
+      ...nuevas,
+    ]);
+
+    event.target.value = "";
   }
 
-  function mostrarOk(texto: string) {
-    setMensaje(texto);
-    setTipoMensaje("OK");
+  function quitarImagenPendiente(index: number) {
+    setImagenesPendientes((actuales) => {
+      const imagen = actuales[index];
+
+      if (imagen) {
+        URL.revokeObjectURL(imagen.preview);
+      }
+
+      return actuales.filter((_, i) => i !== index);
+    });
   }
 
-  function mostrarError(texto: string) {
-    setMensaje(texto);
-    setTipoMensaje("ERROR");
+  /* =========================================================
+     ENVIAR SEGUIMIENTO
+  ========================================================= */
+
+  async function enviarSeguimiento() {
+    if (!ticket) return;
+
+    const texto = nuevoSeguimiento.trim();
+
+    if (!texto && imagenesPendientes.length === 0) {
+      return;
+    }
+
+    setEnviandoSeguimiento(true);
+    setError("");
+
+    try {
+      /*
+       * La columna mensaje es NOT NULL.
+       * Si se envían solo imágenes guardamos un texto neutro.
+       */
+      const mensajeBD =
+        texto || "Imagen adjunta";
+
+      const { data: seguimientoData, error: seguimientoError } =
+        await supabase
+          .from("it_seguimientos")
+          .insert({
+            ticket_id: ticket.id,
+            creado_por: userId,
+            mensaje: mensajeBD,
+          })
+          .select(`
+            id,
+            ticket_id,
+            creado_por,
+            mensaje,
+            creado_en
+          `)
+          .single();
+
+      if (seguimientoError) {
+        throw seguimientoError;
+      }
+
+      const seguimiento =
+        seguimientoData as Seguimiento;
+
+      const nuevosArchivos: ArchivoSeguimiento[] = [];
+
+      for (const imagen of imagenesPendientes) {
+        const extension =
+          imagen.file.name.split(".").pop()?.toLowerCase() ??
+          "jpg";
+
+        const nombreSeguro = imagen.file.name
+          .replace(/\.[^/.]+$/, "")
+          .replace(/[^a-zA-Z0-9-_]/g, "-")
+          .slice(0, 70);
+
+        const ruta = `${ticket.id}/${seguimiento.id}/${Date.now()}-${nombreSeguro}.${extension}`;
+
+        const { error: uploadError } =
+          await supabase.storage
+            .from("it-tickets")
+            .upload(ruta, imagen.file, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: imagen.file.type,
+            });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const {
+          data: archivoData,
+          error: archivoError,
+        } = await supabase
+          .from("it_seguimiento_archivos")
+          .insert({
+            seguimiento_id: seguimiento.id,
+            ticket_id: ticket.id,
+            nombre_archivo: imagen.file.name,
+            ruta_storage: ruta,
+            tipo_mime: imagen.file.type,
+            tamano: imagen.file.size,
+            creado_por: userId,
+          })
+          .select(`
+            id,
+            seguimiento_id,
+            ticket_id,
+            nombre_archivo,
+            ruta_storage,
+            tipo_mime,
+            tamano,
+            creado_por,
+            creado_en
+          `)
+          .single();
+
+        if (archivoError) {
+          throw archivoError;
+        }
+
+        const { data: signedData } =
+          await supabase.storage
+            .from("it-tickets")
+            .createSignedUrl(ruta, 60 * 60);
+
+        nuevosArchivos.push({
+          ...(archivoData as ArchivoSeguimiento),
+          url: signedData?.signedUrl,
+        });
+      }
+
+      setSeguimientos((actuales) => [
+        ...actuales,
+        seguimiento,
+      ]);
+
+      setArchivos((actuales) => [
+        ...actuales,
+        ...nuevosArchivos,
+      ]);
+
+      imagenesPendientes.forEach((imagen) => {
+        URL.revokeObjectURL(imagen.preview);
+      });
+
+      setImagenesPendientes([]);
+      setNuevoSeguimiento("");
+    } catch (err: any) {
+      console.error(err);
+
+      setError(
+        `No se ha podido añadir el seguimiento: ${
+          err?.message ?? "Error desconocido"
+        }`
+      );
+    } finally {
+      setEnviandoSeguimiento(false);
+    }
   }
 
   /* =========================================================
@@ -574,7 +888,9 @@ export default function TicketPage() {
   if (loading) {
     return (
       <main style={styles.loading}>
-        <div style={styles.loader} />
+        <div style={styles.loadingIcon}>
+          <SupportIcon color="#00AF9A" />
+        </div>
 
         <p style={styles.loadingText}>
           Cargando ticket...
@@ -582,10 +898,6 @@ export default function TicketPage() {
       </main>
     );
   }
-
-  /* =========================================================
-     NO ENCONTRADO
-  ========================================================= */
 
   if (!ticket) {
     return (
@@ -651,9 +963,7 @@ export default function TicketPage() {
           Volver a tickets
         </button>
 
-        {/* ===================================================
-            CABECERA DEL TICKET
-        =================================================== */}
+        {/* CABECERA */}
 
         <section style={styles.ticketHeader}>
           <div style={styles.ticketHeaderLeft}>
@@ -690,16 +1000,17 @@ export default function TicketPage() {
 
               {rol === "ADMIN" ? (
                 <select
-                  value={ticket.importancia}
-                  onChange={(e) =>
-                    cambiarImportancia(
+                  value={importanciaEditada}
+                  onChange={(e) => {
+                    setImportanciaEditada(
                       e.target.value as Importancia
-                    )
-                  }
+                    );
+                    setMensajeGuardado("");
+                  }}
                   style={{
                     ...styles.controlSelect,
                     ...getImportanciaStyle(
-                      ticket.importancia
+                      importanciaEditada
                     ),
                   }}
                 >
@@ -722,15 +1033,16 @@ export default function TicketPage() {
 
               {rol === "ADMIN" ? (
                 <select
-                  value={ticket.estado}
-                  onChange={(e) =>
-                    cambiarEstado(
+                  value={estadoEditado}
+                  onChange={(e) => {
+                    setEstadoEditado(
                       e.target.value as Estado
-                    )
-                  }
+                    );
+                    setMensajeGuardado("");
+                  }}
                   style={{
                     ...styles.controlSelect,
-                    ...getEstadoStyle(ticket.estado),
+                    ...getEstadoStyle(estadoEditado),
                   }}
                 >
                   <option value="PENDIENTE">
@@ -752,33 +1064,17 @@ export default function TicketPage() {
           </div>
         </section>
 
-        {/* ===================================================
-            MENSAJES
-        =================================================== */}
+        {/* ERROR */}
 
-        {mensaje && (
-          <div
-            style={{
-              ...styles.message,
-              ...(tipoMensaje === "OK"
-                ? styles.successMessage
-                : styles.errorMessage),
-            }}
-          >
-            {tipoMensaje === "OK" ? (
-              <CheckIcon />
-            ) : (
-              <AlertIcon />
-            )}
-
-            <span>{mensaje}</span>
+        {error && (
+          <div style={styles.errorMessage}>
+            <AlertIcon />
+            <span>{error}</span>
           </div>
         )}
 
         <div style={styles.layout}>
-          {/* =================================================
-              COLUMNA PRINCIPAL
-          ================================================= */}
+          {/* COLUMNA PRINCIPAL */}
 
           <div style={styles.mainColumn}>
             {/* INCIDENCIA */}
@@ -836,8 +1132,8 @@ export default function TicketPage() {
                   </h2>
 
                   <p style={styles.cardSubtitle}>
-                    Historial de comunicaciones sobre
-                    esta incidencia.
+                    Historial de comunicaciones sobre esta
+                    incidencia.
                   </p>
                 </div>
               </div>
@@ -849,14 +1145,27 @@ export default function TicketPage() {
               ) : (
                 <div style={styles.timeline}>
                   {seguimientos.map((seguimiento) => {
+                    const esCreadorTicket =
+                      seguimiento.creado_por ===
+                      ticket.creado_por;
+
                     const esMio =
                       seguimiento.creado_por === userId;
 
-                    const esAdmin =
-                      rol === "USUARIO"
-                        ? !esMio
-                        : seguimiento.creado_por !==
-                          ticket.creado_por;
+                    const esInformatico =
+                      !esCreadorTicket;
+
+                    const imagenesSeguimiento =
+                      archivos.filter(
+                        (archivo) =>
+                          archivo.seguimiento_id ===
+                          seguimiento.id
+                      );
+
+                    const soloImagen =
+                      seguimiento.mensaje ===
+                        "Imagen adjunta" &&
+                      imagenesSeguimiento.length > 0;
 
                     return (
                       <div
@@ -866,15 +1175,19 @@ export default function TicketPage() {
                         <div
                           style={{
                             ...styles.timelineAvatar,
-                            background: esAdmin
-                              ? "#00AF9A"
-                              : "#eef2f2",
-                            color: esAdmin
-                              ? "#ffffff"
-                              : "#5e6666",
+                            ...(esInformatico
+                              ? styles.timelineAvatarIT
+                              : styles.timelineAvatarUser),
                           }}
                         >
-                          {esAdmin ? "IT" : "U"}
+                          {esInformatico ? (
+                            <SupportIcon
+                              color="#ffffff"
+                              size={16}
+                            />
+                          ) : (
+                            <UserSmallIcon />
+                          )}
                         </div>
 
                         <div style={styles.timelineContent}>
@@ -882,10 +1195,9 @@ export default function TicketPage() {
                             <strong
                               style={styles.timelineAuthor}
                             >
-                              {esAdmin
+                              {esInformatico
                                 ? "Informática"
-                                : seguimiento.creado_por ===
-                                  userId
+                                : esMio
                                 ? "Tú"
                                 : ticket.nombre}
                             </strong>
@@ -899,15 +1211,61 @@ export default function TicketPage() {
                             </span>
                           </div>
 
-                          <div style={styles.timelineMessage}>
-                            {seguimiento.mensaje}
-                          </div>
+                          {!soloImagen && (
+                            <div
+                              style={styles.timelineMessage}
+                            >
+                              {seguimiento.mensaje}
+                            </div>
+                          )}
+
+                          {imagenesSeguimiento.length >
+                            0 && (
+                            <div
+                              style={
+                                styles.followUpImages
+                              }
+                            >
+                              {imagenesSeguimiento.map(
+                                (archivo) =>
+                                  archivo.url ? (
+                                    <button
+                                      key={archivo.id}
+                                      type="button"
+                                      onClick={() =>
+                                        setImagenAmpliada(
+                                          archivo.url!
+                                        )
+                                      }
+                                      style={
+                                        styles.followUpImageButton
+                                      }
+                                      title={
+                                        archivo.nombre_archivo
+                                      }
+                                    >
+                                      <img
+                                        src={archivo.url}
+                                        alt={
+                                          archivo.nombre_archivo
+                                        }
+                                        style={
+                                          styles.followUpImage
+                                        }
+                                      />
+                                    </button>
+                                  ) : null
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
               )}
+
+              {/* NUEVO SEGUIMIENTO */}
 
               <div style={styles.followUpComposer}>
                 <label style={styles.fieldLabel}>
@@ -927,25 +1285,73 @@ export default function TicketPage() {
                   style={styles.textarea}
                 />
 
+                {/* PREVISUALIZACIÓN */}
+
+                {imagenesPendientes.length > 0 && (
+                  <div style={styles.previewGrid}>
+                    {imagenesPendientes.map(
+                      (imagen, index) => (
+                        <div
+                          key={`${imagen.file.name}-${index}`}
+                          style={styles.previewItem}
+                        >
+                          <img
+                            src={imagen.preview}
+                            alt={imagen.file.name}
+                            style={styles.previewImage}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              quitarImagenPendiente(index)
+                            }
+                            style={styles.removeImage}
+                            title="Quitar imagen"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+
                 <div style={styles.composerFooter}>
-                  <span style={styles.composerHint}>
-                    La nota quedará registrada en el
-                    historial del ticket.
-                  </span>
+                  <div style={styles.composerLeft}>
+                    <label style={styles.attachButton}>
+                      <ImageIcon />
+                      Adjuntar imágenes
+
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        multiple
+                        onChange={seleccionarImagenes}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+
+                    <span style={styles.composerHint}>
+                      JPG, PNG o WEBP · Máx. 10 MB
+                    </span>
+                  </div>
 
                   <button
                     type="button"
                     onClick={enviarSeguimiento}
                     disabled={
                       enviandoSeguimiento ||
-                      !nuevoSeguimiento.trim()
+                      (!nuevoSeguimiento.trim() &&
+                        imagenesPendientes.length === 0)
                     }
                     style={{
                       ...styles.sendButton,
                       opacity:
                         enviandoSeguimiento ||
-                        !nuevoSeguimiento.trim()
-                          ? 0.55
+                        (!nuevoSeguimiento.trim() &&
+                          imagenesPendientes.length === 0)
+                          ? 0.5
                           : 1,
                     }}
                   >
@@ -960,9 +1366,7 @@ export default function TicketPage() {
             </section>
           </div>
 
-          {/* =================================================
-              COLUMNA LATERAL
-          ================================================= */}
+          {/* COLUMNA LATERAL */}
 
           <aside style={styles.sideColumn}>
             {/* CONTACTO */}
@@ -988,9 +1392,10 @@ export default function TicketPage() {
                 <Field label="Nombre">
                   <input
                     value={nombre}
-                    onChange={(e) =>
-                      setNombre(e.target.value)
-                    }
+                    onChange={(e) => {
+                      setNombre(e.target.value);
+                      setMensajeGuardado("");
+                    }}
                     disabled={rol === "ADMIN"}
                     style={{
                       ...styles.input,
@@ -1004,9 +1409,10 @@ export default function TicketPage() {
                 <Field label="Empresa">
                   <input
                     value={empresa}
-                    onChange={(e) =>
-                      setEmpresa(e.target.value)
-                    }
+                    onChange={(e) => {
+                      setEmpresa(e.target.value);
+                      setMensajeGuardado("");
+                    }}
                     disabled={rol === "ADMIN"}
                     style={{
                       ...styles.input,
@@ -1021,9 +1427,10 @@ export default function TicketPage() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) =>
-                      setEmail(e.target.value)
-                    }
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setMensajeGuardado("");
+                    }}
                     disabled={rol === "ADMIN"}
                     style={{
                       ...styles.input,
@@ -1037,9 +1444,10 @@ export default function TicketPage() {
                 <Field label="Teléfono">
                   <input
                     value={telefono}
-                    onChange={(e) =>
-                      setTelefono(e.target.value)
-                    }
+                    onChange={(e) => {
+                      setTelefono(e.target.value);
+                      setMensajeGuardado("");
+                    }}
                     disabled={rol === "ADMIN"}
                     style={{
                       ...styles.input,
@@ -1051,19 +1459,34 @@ export default function TicketPage() {
                 </Field>
 
                 {rol === "USUARIO" && (
-                  <button
-                    type="button"
-                    onClick={guardarDatosContacto}
-                    disabled={guardando}
-                    style={{
-                      ...styles.saveButton,
-                      opacity: guardando ? 0.6 : 1,
-                    }}
-                  >
-                    {guardando
-                      ? "Guardando..."
-                      : "Guardar cambios"}
-                  </button>
+                  <div style={styles.saveArea}>
+                    <button
+                      type="button"
+                      onClick={guardarDatosContacto}
+                      disabled={
+                        guardando || !hayCambiosUsuario
+                      }
+                      style={{
+                        ...styles.saveButton,
+                        opacity:
+                          guardando ||
+                          !hayCambiosUsuario
+                            ? 0.55
+                            : 1,
+                      }}
+                    >
+                      {guardando
+                        ? "Guardando..."
+                        : "Guardar cambios"}
+                    </button>
+
+                    {mensajeGuardado && (
+                      <span style={styles.savedMessage}>
+                        <CheckIcon />
+                        {mensajeGuardado}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </section>
@@ -1135,13 +1558,10 @@ export default function TicketPage() {
                   </label>
 
                   <select
-                    defaultValue=""
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        asignarTag(e.target.value);
-                        e.target.value = "";
-                      }
-                    }}
+                    value=""
+                    onChange={(e) =>
+                      seleccionarTag(e.target.value)
+                    }
                     style={styles.input}
                   >
                     <option value="">
@@ -1174,7 +1594,9 @@ export default function TicketPage() {
                     <input
                       value={nuevoTagNombre}
                       onChange={(e) =>
-                        setNuevoTagNombre(e.target.value)
+                        setNuevoTagNombre(
+                          e.target.value
+                        )
                       }
                       placeholder="Ej. OUTLOOK"
                       style={styles.input}
@@ -1185,7 +1607,9 @@ export default function TicketPage() {
                         type="color"
                         value={nuevoTagColor}
                         onChange={(e) =>
-                          setNuevoTagColor(e.target.value)
+                          setNuevoTagColor(
+                            e.target.value
+                          )
                         }
                         style={styles.colorInput}
                       />
@@ -1209,7 +1633,39 @@ export default function TicketPage() {
               )}
             </section>
 
-            {/* INFORMACIÓN */}
+            {/* GUARDADO ADMIN */}
+
+            {rol === "ADMIN" && (
+              <div style={styles.adminSaveArea}>
+                <button
+                  type="button"
+                  onClick={guardarCambiosAdmin}
+                  disabled={guardando || !hayCambiosAdmin}
+                  style={{
+                    ...styles.adminSaveButton,
+                    opacity:
+                      guardando || !hayCambiosAdmin
+                        ? 0.55
+                        : 1,
+                  }}
+                >
+                  <SaveIcon />
+
+                  {guardando
+                    ? "Guardando..."
+                    : "Guardar cambios"}
+                </button>
+
+                {mensajeGuardado && (
+                  <span style={styles.savedMessage}>
+                    <CheckIcon />
+                    {mensajeGuardado}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* INFO */}
 
             <section style={styles.infoCard}>
               <div style={styles.infoRow}>
@@ -1241,6 +1697,30 @@ export default function TicketPage() {
           </aside>
         </div>
       </div>
+
+      {/* VISOR IMAGEN */}
+
+      {imagenAmpliada && (
+        <div
+          style={styles.imageModal}
+          onClick={() => setImagenAmpliada(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setImagenAmpliada(null)}
+            style={styles.modalClose}
+          >
+            ×
+          </button>
+
+          <img
+            src={imagenAmpliada}
+            alt="Imagen adjunta"
+            style={styles.modalImage}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </main>
   );
 }
@@ -1263,7 +1743,7 @@ function Header({
       <div style={styles.headerInner}>
         <div style={styles.brand}>
           <div style={styles.logoIcon}>
-            <SupportIcon />
+            <SupportIcon color="#ffffff" />
           </div>
 
           <div>
@@ -1432,6 +1912,10 @@ function StatusBadge({
   );
 }
 
+/* =========================================================
+   COLORES
+========================================================= */
+
 function getEstadoStyle(
   estado: Estado
 ): React.CSSProperties {
@@ -1492,10 +1976,6 @@ function getImportanciaStyle(
   };
 }
 
-/* =========================================================
-   FECHA
-========================================================= */
-
 function formatearFecha(fecha: string) {
   return new Intl.DateTimeFormat("es-ES", {
     day: "2-digit",
@@ -1510,14 +1990,20 @@ function formatearFecha(fecha: string) {
    ICONOS
 ========================================================= */
 
-function SupportIcon() {
+function SupportIcon({
+  color = "currentColor",
+  size = 24,
+}: {
+  color?: string;
+  size?: number;
+}) {
   return (
     <svg
-      width="24"
-      height="24"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="white"
+      stroke={color}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -1526,6 +2012,22 @@ function SupportIcon() {
       <path d="M18 19c0 1.1-.9 2-2 2h-3" />
       <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
       <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
+    </svg>
+  );
+}
+
+function UserSmallIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle cx="12" cy="8" r="4" />
+      <path d="M5 21a7 7 0 0 1 14 0" />
     </svg>
   );
 }
@@ -1592,9 +2094,29 @@ function SendIcon() {
   );
 }
 
+function ImageIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="m21 15-5-5L5 21" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+      <path d="M17 21v-8H7v8" />
+      <path d="M7 3v5h8" />
+    </svg>
+  );
+}
+
 function CheckIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
       <circle cx="12" cy="12" r="9" />
       <path d="m8 12 2.5 2.5L16 9" />
     </svg>
@@ -1644,18 +2166,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'Poppins', Arial, sans-serif",
   },
 
-  loader: {
-    width: "28px",
-    height: "28px",
-    border: "3px solid #dfe8e7",
-    borderTopColor: "#00AF9A",
-    borderRadius: "50%",
+  loadingIcon: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "11px",
+    background: "#e9f8f5",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   loadingText: {
     margin: 0,
     color: "#7b8282",
-    fontSize: "12px",
+    fontSize: "11px",
   },
 
   header: {
@@ -1829,7 +2353,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   layout: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.8fr) minmax(300px, 0.8fr)",
+    gridTemplateColumns:
+      "minmax(0, 1.8fr) minmax(300px, 0.8fr)",
     gap: "20px",
     alignItems: "start",
   },
@@ -1947,18 +2472,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "default",
   },
 
-  saveButton: {
-    height: "40px",
-    border: "none",
-    borderRadius: "8px",
-    background: "#00AF9A",
-    color: "#ffffff",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-
   badge: {
     minWidth: "105px",
     height: "36px",
@@ -1980,6 +2493,19 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "50%",
   },
 
+  errorMessage: {
+    borderRadius: "9px",
+    padding: "11px 14px",
+    marginBottom: "20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    background: "#fff1f1",
+    border: "1px solid #f0cece",
+    color: "#a63d3d",
+    fontSize: "10px",
+  },
+
   noFollowUps: {
     padding: "25px 0 30px",
     color: "#929999",
@@ -1990,7 +2516,7 @@ const styles: Record<string, React.CSSProperties> = {
   timeline: {
     display: "flex",
     flexDirection: "column",
-    gap: "18px",
+    gap: "20px",
     marginBottom: "25px",
   },
 
@@ -2007,9 +2533,17 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "9px",
-    fontWeight: 700,
     flexShrink: 0,
+  },
+
+  timelineAvatarIT: {
+    background: "#00AF9A",
+    color: "#ffffff",
+  },
+
+  timelineAvatarUser: {
+    background: "#edf1f1",
+    color: "#687171",
   },
 
   timelineContent: {
@@ -2043,6 +2577,31 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "pre-wrap",
   },
 
+  followUpImages: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginTop: "9px",
+  },
+
+  followUpImageButton: {
+    width: "110px",
+    height: "82px",
+    padding: 0,
+    overflow: "hidden",
+    border: "1px solid #e1e6e6",
+    borderRadius: "8px",
+    background: "#f5f7f7",
+    cursor: "pointer",
+  },
+
+  followUpImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+
   followUpComposer: {
     paddingTop: "20px",
     borderTop: "1px solid #edf0f0",
@@ -2062,17 +2621,76 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.6,
   },
 
+  previewGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginTop: "10px",
+  },
+
+  previewItem: {
+    width: "90px",
+    height: "70px",
+    position: "relative",
+    borderRadius: "8px",
+    overflow: "hidden",
+    border: "1px solid #e1e6e6",
+  },
+
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+
+  removeImage: {
+    position: "absolute",
+    top: "4px",
+    right: "4px",
+    width: "21px",
+    height: "21px",
+    padding: 0,
+    border: "none",
+    borderRadius: "50%",
+    background: "rgba(0,0,0,0.65)",
+    color: "#ffffff",
+    lineHeight: "20px",
+    cursor: "pointer",
+  },
+
   composerFooter: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     gap: "15px",
-    marginTop: "10px",
+    marginTop: "11px",
+  },
+
+  composerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+
+  attachButton: {
+    height: "34px",
+    padding: "0 11px",
+    border: "1px solid #d7dddd",
+    borderRadius: "8px",
+    background: "#ffffff",
+    color: "#566060",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    fontSize: "9px",
+    fontWeight: 600,
+    cursor: "pointer",
   },
 
   composerHint: {
     color: "#969d9d",
-    fontSize: "9px",
+    fontSize: "8px",
   },
 
   sendButton: {
@@ -2171,6 +2789,59 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
 
+  saveArea: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+
+  saveButton: {
+    height: "40px",
+    padding: "0 15px",
+    border: "none",
+    borderRadius: "8px",
+    background: "#00AF9A",
+    color: "#ffffff",
+    fontFamily: "'Poppins', Arial, sans-serif",
+    fontSize: "10px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  adminSaveArea: {
+    display: "flex",
+    alignItems: "center",
+    gap: "11px",
+    flexWrap: "wrap",
+    marginBottom: "20px",
+  },
+
+  adminSaveButton: {
+    height: "42px",
+    padding: "0 16px",
+    border: "none",
+    borderRadius: "9px",
+    background: "#00AF9A",
+    color: "#ffffff",
+    display: "flex",
+    alignItems: "center",
+    gap: "7px",
+    fontFamily: "'Poppins', Arial, sans-serif",
+    fontSize: "10px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  savedMessage: {
+    color: "#13806c",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "9px",
+    fontWeight: 600,
+  },
+
   infoCard: {
     background: "#ffffff",
     border: "1px solid #e5e9e9",
@@ -2188,26 +2859,37 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "9px",
   },
 
-  message: {
-    borderRadius: "9px",
-    padding: "11px 14px",
-    marginBottom: "20px",
+  imageModal: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    background: "rgba(16, 20, 20, 0.82)",
     display: "flex",
     alignItems: "center",
-    gap: "8px",
-    fontSize: "10px",
+    justifyContent: "center",
+    padding: "40px",
   },
 
-  successMessage: {
-    background: "#eaf8f4",
-    border: "1px solid #c9ebe2",
-    color: "#087965",
+  modalImage: {
+    maxWidth: "92vw",
+    maxHeight: "88vh",
+    objectFit: "contain",
+    borderRadius: "10px",
+    background: "#ffffff",
   },
 
-  errorMessage: {
-    background: "#fff1f1",
-    border: "1px solid #f0cece",
-    color: "#a63d3d",
+  modalClose: {
+    position: "fixed",
+    top: "22px",
+    right: "28px",
+    width: "38px",
+    height: "38px",
+    border: "1px solid rgba(255,255,255,0.3)",
+    borderRadius: "50%",
+    background: "rgba(0,0,0,0.25)",
+    color: "#ffffff",
+    fontSize: "24px",
+    cursor: "pointer",
   },
 
   notFound: {
