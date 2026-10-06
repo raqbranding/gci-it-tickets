@@ -899,7 +899,7 @@ function PriorityBadge({
         }}
       />
 
-      Importancia: {current.label}
+      {current.label}
     </span>
   );
 }
