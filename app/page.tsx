@@ -41,7 +41,6 @@ export default function Home() {
   const [fecha, setFecha] = useState("TODAS");
   const [importancia, setImportancia] = useState("TODAS");
   const [estado, setEstado] = useState<EstadoFiltro>("TODOS");
-  const [tag, setTag] = useState("TODOS");
   const [orden, setOrden] = useState("RECIENTES");
 
   useEffect(() => {
@@ -67,11 +66,7 @@ export default function Home() {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (
-      errorAcceso ||
-      !acceso ||
-      !acceso.activo
-    ) {
+    if (errorAcceso || !acceso || !acceso.activo) {
       await supabase.auth.signOut();
       router.replace("/login");
       return;
@@ -81,15 +76,6 @@ export default function Home() {
 
     setEmail(user.email ?? "");
     setRol(rolUsuario);
-
-    /*
-      No hace falta filtrar manualmente por creado_por
-      para un usuario normal.
-
-      Las políticas RLS de Supabase ya hacen que:
-      - USUARIO vea únicamente sus tickets.
-      - ADMIN vea todos.
-    */
 
     const { data: ticketsData, error: ticketsError } =
       await supabase
@@ -119,10 +105,7 @@ export default function Home() {
         });
 
     if (ticketsError) {
-      console.error(
-        "Error cargando tickets:",
-        ticketsError
-      );
+      console.error("Error cargando tickets:", ticketsError);
 
       setErrorCarga(
         `No se han podido cargar los tickets: ${ticketsError.message}`
@@ -142,21 +125,81 @@ export default function Home() {
     router.replace("/login");
   }
 
-  function seleccionarEstado(
-    nuevoEstado: Estado
-  ) {
+  function seleccionarEstado(nuevoEstado: Estado) {
     setEstado((actual) =>
-      actual === nuevoEstado
-        ? "TODOS"
-        : nuevoEstado
+      actual === nuevoEstado ? "TODOS" : nuevoEstado
     );
   }
 
-  /*
-    =========================================================
-    CONTADORES
-    =========================================================
-  */
+  async function cambiarEstadoTicket(
+    ticketId: string,
+    nuevoEstado: Estado
+  ) {
+    if (rol !== "ADMIN") {
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    const ahora = new Date().toISOString();
+
+    const cambios =
+      nuevoEstado === "RESUELTO"
+        ? {
+            estado: nuevoEstado,
+            actualizado_en: ahora,
+            resuelto_en: ahora,
+            resuelto_por: user.id,
+          }
+        : {
+            estado: nuevoEstado,
+            actualizado_en: ahora,
+            resuelto_en: null,
+            resuelto_por: null,
+          };
+
+    const { error } = await supabase
+      .from("it_tickets")
+      .update(cambios)
+      .eq("id", ticketId);
+
+    if (error) {
+      console.error("Error cambiando estado:", error);
+
+      setErrorCarga(
+        `No se ha podido cambiar el estado: ${error.message}`
+      );
+
+      return;
+    }
+
+    setErrorCarga("");
+
+    setTickets((actuales) =>
+      actuales.map((ticket) =>
+        ticket.id === ticketId
+          ? {
+              ...ticket,
+              estado: nuevoEstado,
+              actualizado_en: cambios.actualizado_en,
+              resuelto_en: cambios.resuelto_en,
+              resuelto_por: cambios.resuelto_por,
+            }
+          : ticket
+      )
+    );
+  }
+
+  /* =========================================================
+     CONTADORES
+  ========================================================= */
 
   const pendientes = tickets.filter(
     (ticket) => ticket.estado === "PENDIENTE"
@@ -170,137 +213,79 @@ export default function Home() {
     (ticket) => ticket.estado === "RESUELTO"
   ).length;
 
-  /*
-    =========================================================
-    FILTRADO
-    =========================================================
-  */
+  /* =========================================================
+     FILTRADO
+  ========================================================= */
 
   const ticketsFiltrados = useMemo(() => {
     let resultado = [...tickets];
 
-    /*
-      ESTADO
-      Disponible tanto para ADMIN como para USUARIO.
-    */
-
+    // ESTADO - TODOS
     if (estado !== "TODOS") {
       resultado = resultado.filter(
         (ticket) => ticket.estado === estado
       );
     }
 
-    /*
-      FECHA
-      Disponible tanto para ADMIN como para USUARIO.
-    */
-
+    // FECHA - TODOS
     if (fecha !== "TODAS") {
       const ahora = new Date();
 
       if (fecha === "HOY") {
-        resultado = resultado.filter(
-          (ticket) => {
-            const fechaTicket = new Date(
-              ticket.creado_en
-            );
+        resultado = resultado.filter((ticket) => {
+          const fechaTicket = new Date(ticket.creado_en);
 
-            return (
-              fechaTicket.getDate() ===
-                ahora.getDate() &&
-              fechaTicket.getMonth() ===
-                ahora.getMonth() &&
-              fechaTicket.getFullYear() ===
-                ahora.getFullYear()
-            );
-          }
-        );
+          return (
+            fechaTicket.getDate() === ahora.getDate() &&
+            fechaTicket.getMonth() === ahora.getMonth() &&
+            fechaTicket.getFullYear() === ahora.getFullYear()
+          );
+        });
       }
 
       if (fecha === "7_DIAS") {
         const limite = new Date();
-
-        limite.setDate(
-          limite.getDate() - 7
-        );
+        limite.setDate(limite.getDate() - 7);
 
         resultado = resultado.filter(
-          (ticket) =>
-            new Date(ticket.creado_en) >=
-            limite
+          (ticket) => new Date(ticket.creado_en) >= limite
         );
       }
 
       if (fecha === "30_DIAS") {
         const limite = new Date();
-
-        limite.setDate(
-          limite.getDate() - 30
-        );
+        limite.setDate(limite.getDate() - 30);
 
         resultado = resultado.filter(
-          (ticket) =>
-            new Date(ticket.creado_en) >=
-            limite
+          (ticket) => new Date(ticket.creado_en) >= limite
         );
       }
     }
 
-    /*
-      A PARTIR DE AQUÍ:
-      FILTROS SOLO PARA ADMIN
-    */
-
+    // FILTROS EXCLUSIVOS DE ADMIN
     if (rol === "ADMIN") {
-      const texto =
-        busqueda.trim().toLowerCase();
+      const texto = busqueda.trim().toLowerCase();
 
       if (texto) {
         resultado = resultado.filter(
           (ticket) =>
-            ticket.nombre
-              ?.toLowerCase()
-              .includes(texto) ||
-            ticket.empresa
-              ?.toLowerCase()
-              .includes(texto) ||
-            ticket.titulo
-              ?.toLowerCase()
-              .includes(texto) ||
-            ticket.email
-              ?.toLowerCase()
-              .includes(texto) ||
-            String(ticket.numero ?? "")
-              .toLowerCase()
-              .includes(texto)
+            ticket.nombre?.toLowerCase().includes(texto) ||
+            ticket.empresa?.toLowerCase().includes(texto) ||
+            ticket.titulo?.toLowerCase().includes(texto) ||
+            ticket.email?.toLowerCase().includes(texto) ||
+            String(ticket.numero ?? "").includes(texto)
         );
       }
 
       if (importancia !== "TODAS") {
         resultado = resultado.filter(
-          (ticket) =>
-            ticket.importancia ===
-            importancia
+          (ticket) => ticket.importancia === importancia
         );
       }
 
-      /*
-        TAG se conectará cuando creemos
-        it_tags / relación de tags.
-      */
-
-      if (tag !== "TODOS") {
-        // Preparado para la fase de tags.
-      }
-
       resultado.sort((a, b) => {
-        const fechaA = new Date(
-          a.creado_en
-        ).getTime();
-
-        const fechaB = new Date(
-          b.creado_en
-        ).getTime();
+        const fechaA = new Date(a.creado_en).getTime();
+        const fechaB = new Date(b.creado_en).getTime();
 
         if (orden === "ANTIGUOS") {
           return fechaA - fechaB;
@@ -309,19 +294,10 @@ export default function Home() {
         return fechaB - fechaA;
       });
     } else {
-      /*
-        Para usuario normal dejamos
-        siempre los más recientes primero.
-      */
-
       resultado.sort(
         (a, b) =>
-          new Date(
-            b.creado_en
-          ).getTime() -
-          new Date(
-            a.creado_en
-          ).getTime()
+          new Date(b.creado_en).getTime() -
+          new Date(a.creado_en).getTime()
       );
     }
 
@@ -333,18 +309,31 @@ export default function Home() {
     rol,
     busqueda,
     importancia,
-    tag,
     orden,
   ]);
+
+  function limpiarFiltros() {
+    setEstado("TODOS");
+    setFecha("TODAS");
+    setBusqueda("");
+    setImportancia("TODAS");
+    setOrden("RECIENTES");
+  }
+
+  const hayFiltros =
+    estado !== "TODOS" ||
+    fecha !== "TODAS" ||
+    (rol === "ADMIN" &&
+      (busqueda.trim() !== "" ||
+        importancia !== "TODAS" ||
+        orden !== "RECIENTES"));
 
   if (loading) {
     return (
       <main style={styles.loading}>
         <div style={styles.loader} />
 
-        <p style={styles.loadingText}>
-          Cargando...
-        </p>
+        <p style={styles.loadingText}>Cargando...</p>
       </main>
     );
   }
@@ -363,9 +352,7 @@ export default function Home() {
             </div>
 
             <div>
-              <div style={styles.brandTitle}>
-                IT Support
-              </div>
+              <div style={styles.brandTitle}>IT Support</div>
 
               <div style={styles.brandSubtitle}>
                 Gestión de incidencias informáticas
@@ -375,14 +362,10 @@ export default function Home() {
 
           <div style={styles.userArea}>
             <div style={styles.userInfo}>
-              <span style={styles.email}>
-                {email}
-              </span>
+              <span style={styles.email}>{email}</span>
 
               <span style={styles.role}>
-                {rol === "ADMIN"
-                  ? "ADMINISTRADOR"
-                  : "USUARIO"}
+                {rol === "ADMIN" ? "ADMINISTRADOR" : "USUARIO"}
               </span>
             </div>
 
@@ -403,6 +386,8 @@ export default function Home() {
       ===================================================== */}
 
       <div style={styles.container}>
+        {/* CABECERA DE PÁGINA */}
+
         <section style={styles.topSection}>
           <div>
             <h1 style={styles.pageTitle}>
@@ -420,20 +405,15 @@ export default function Home() {
 
           <button
             style={styles.newTicket}
-            onClick={() =>
-              router.push("/nuevo-ticket")
-            }
+            onClick={() => router.push("/nuevo-ticket")}
           >
-            <span style={styles.plus}>
-              +
-            </span>
-
+            <span style={styles.plus}>+</span>
             Nuevo ticket
           </button>
         </section>
 
         {/* =====================================================
-            CONTADORES
+            TARJETAS DE ESTADO
         ===================================================== */}
 
         <section style={styles.stats}>
@@ -441,42 +421,24 @@ export default function Home() {
             type="pending"
             title="Pendientes"
             number={pendientes}
-            active={
-              estado === "PENDIENTE"
-            }
-            onClick={() =>
-              seleccionarEstado(
-                "PENDIENTE"
-              )
-            }
+            active={estado === "PENDIENTE"}
+            onClick={() => seleccionarEstado("PENDIENTE")}
           />
 
           <StatusCard
             type="progress"
             title="En curso"
             number={enCurso}
-            active={
-              estado === "EN_CURSO"
-            }
-            onClick={() =>
-              seleccionarEstado(
-                "EN_CURSO"
-              )
-            }
+            active={estado === "EN_CURSO"}
+            onClick={() => seleccionarEstado("EN_CURSO")}
           />
 
           <StatusCard
             type="resolved"
             title="Resueltos"
             number={resueltos}
-            active={
-              estado === "RESUELTO"
-            }
-            onClick={() =>
-              seleccionarEstado(
-                "RESUELTO"
-              )
-            }
+            active={estado === "RESUELTO"}
+            onClick={() => seleccionarEstado("RESUELTO")}
           />
         </section>
 
@@ -485,30 +447,18 @@ export default function Home() {
         ===================================================== */}
 
         <section style={styles.filtersCard}>
-          {/* ===============================================
-              BUSCADOR SOLO ADMIN
-          =============================================== */}
+          {/* BUSCADOR SOLO ADMIN */}
 
           {rol === "ADMIN" && (
-            <div
-              style={
-                styles.searchWrapper
-              }
-            >
+            <div style={styles.searchWrapper}>
               <SearchIcon />
 
               <input
                 type="text"
                 value={busqueda}
-                onChange={(e) =>
-                  setBusqueda(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Buscar por nombre, empresa, título, email o número..."
-                style={
-                  styles.searchInput
-                }
+                style={styles.searchInput}
               />
             </div>
           )}
@@ -522,59 +472,32 @@ export default function Home() {
                   : "repeat(2, minmax(0, 1fr))",
             }}
           >
-            {/* FECHA - TODOS */}
+            {/* FECHA */}
 
             <select
               value={fecha}
-              onChange={(e) =>
-                setFecha(e.target.value)
-              }
+              onChange={(e) => setFecha(e.target.value)}
               style={styles.select}
             >
-              <option value="TODAS">
-                Todas las fechas
-              </option>
-
-              <option value="HOY">
-                Hoy
-              </option>
-
-              <option value="7_DIAS">
-                Últimos 7 días
-              </option>
-
-              <option value="30_DIAS">
-                Últimos 30 días
-              </option>
+              <option value="TODAS">Todas las fechas</option>
+              <option value="HOY">Hoy</option>
+              <option value="7_DIAS">Últimos 7 días</option>
+              <option value="30_DIAS">Últimos 30 días</option>
             </select>
 
-            {/* ESTADO - TODOS */}
+            {/* ESTADO */}
 
             <select
               value={estado}
               onChange={(e) =>
-                setEstado(
-                  e.target
-                    .value as EstadoFiltro
-                )
+                setEstado(e.target.value as EstadoFiltro)
               }
               style={styles.select}
             >
-              <option value="TODOS">
-                Todos los estados
-              </option>
-
-              <option value="PENDIENTE">
-                Pendiente
-              </option>
-
-              <option value="EN_CURSO">
-                En curso
-              </option>
-
-              <option value="RESUELTO">
-                Resuelto
-              </option>
+              <option value="TODOS">Todos los estados</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="EN_CURSO">En curso</option>
+              <option value="RESUELTO">Resuelto</option>
             </select>
 
             {/* IMPORTANCIA - SOLO ADMIN */}
@@ -582,32 +505,14 @@ export default function Home() {
             {rol === "ADMIN" && (
               <select
                 value={importancia}
-                onChange={(e) =>
-                  setImportancia(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setImportancia(e.target.value)}
                 style={styles.select}
               >
-                <option value="TODAS">
-                  Toda importancia
-                </option>
-
-                <option value="BAJA">
-                  Baja
-                </option>
-
-                <option value="MEDIA">
-                  Media
-                </option>
-
-                <option value="ALTA">
-                  Alta
-                </option>
-
-                <option value="URGENTE">
-                  Urgente
-                </option>
+                <option value="TODAS">Toda importancia</option>
+                <option value="BAJA">Baja</option>
+                <option value="MEDIA">Media</option>
+                <option value="ALTA">Alta</option>
+                <option value="URGENTE">Urgente</option>
               </select>
             )}
 
@@ -616,20 +521,11 @@ export default function Home() {
             {rol === "ADMIN" && (
               <select
                 value={orden}
-                onChange={(e) =>
-                  setOrden(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setOrden(e.target.value)}
                 style={styles.select}
               >
-                <option value="RECIENTES">
-                  Más recientes
-                </option>
-
-                <option value="ANTIGUOS">
-                  Más antiguos
-                </option>
+                <option value="RECIENTES">Más recientes</option>
+                <option value="ANTIGUOS">Más antiguos</option>
               </select>
             )}
           </div>
@@ -642,7 +538,6 @@ export default function Home() {
         {errorCarga && (
           <div style={styles.errorMessage}>
             <AlertIcon />
-
             <span>{errorCarga}</span>
           </div>
         )}
@@ -655,65 +550,33 @@ export default function Home() {
           <div style={styles.cardHeader}>
             <div>
               <h2 style={styles.cardTitle}>
-                {rol === "ADMIN"
-                  ? "Tickets"
-                  : "Mis tickets"}
+                {rol === "ADMIN" ? "Tickets" : "Mis tickets"}
               </h2>
 
-              <p
-                style={
-                  styles.cardDescription
-                }
-              >
-                {ticketsFiltrados.length ===
-                1
+              <p style={styles.cardDescription}>
+                {ticketsFiltrados.length === 1
                   ? "1 incidencia"
                   : `${ticketsFiltrados.length} incidencias`}
               </p>
             </div>
 
-            {(estado !== "TODOS" ||
-              fecha !== "TODAS" ||
-              (rol === "ADMIN" &&
-                (busqueda ||
-                  importancia !==
-                    "TODAS" ||
-                  orden !==
-                    "RECIENTES"))) && (
+            {hayFiltros && (
               <button
-                onClick={() => {
-                  setEstado("TODOS");
-                  setFecha("TODAS");
-                  setBusqueda("");
-                  setImportancia(
-                    "TODAS"
-                  );
-                  setTag("TODOS");
-                  setOrden(
-                    "RECIENTES"
-                  );
-                }}
-                style={
-                  styles.clearFilter
-                }
+                onClick={limpiarFiltros}
+                style={styles.clearFilter}
               >
                 Limpiar filtros
               </button>
             )}
           </div>
 
-          {ticketsFiltrados.length ===
-          0 ? (
+          {ticketsFiltrados.length === 0 ? (
             <div style={styles.empty}>
-              <div
-                style={styles.emptyIcon}
-              >
+              <div style={styles.emptyIcon}>
                 <TicketIcon />
               </div>
 
-              <h3
-                style={styles.emptyTitle}
-              >
+              <h3 style={styles.emptyTitle}>
                 {tickets.length === 0
                   ? "No hay tickets todavía"
                   : "No hay resultados"}
@@ -727,40 +590,28 @@ export default function Home() {
                   : "No hay incidencias que coincidan con los filtros seleccionados."}
               </p>
 
-              {rol !== "ADMIN" &&
-                tickets.length === 0 && (
-                  <button
-                    style={
-                      styles.secondaryButton
-                    }
-                    onClick={() =>
-                      router.push(
-                        "/nuevo-ticket"
-                      )
-                    }
-                  >
-                    Crear mi primer ticket
-                  </button>
-                )}
+              {rol !== "ADMIN" && tickets.length === 0 && (
+                <button
+                  style={styles.secondaryButton}
+                  onClick={() => router.push("/nuevo-ticket")}
+                >
+                  Crear mi primer ticket
+                </button>
+              )}
             </div>
           ) : (
-            <div
-              style={styles.ticketList}
-            >
-              {ticketsFiltrados.map(
-                (ticket) => (
-                  <TicketRow
-                    key={ticket.id}
-                    ticket={ticket}
-                    rol={rol}
-                    onClick={() =>
-                      router.push(
-                        `/tickets/${ticket.id}`
-                      )
-                    }
-                  />
-                )
-              )}
+            <div style={styles.ticketList}>
+              {ticketsFiltrados.map((ticket) => (
+                <TicketRow
+                  key={ticket.id}
+                  ticket={ticket}
+                  rol={rol}
+                  onClick={() =>
+                    router.push(`/tickets/${ticket.id}`)
+                  }
+                  onEstadoChange={cambiarEstadoTicket}
+                />
+              ))}
             </div>
           )}
         </section>
@@ -777,78 +628,160 @@ function TicketRow({
   ticket,
   rol,
   onClick,
+  onEstadoChange,
 }: {
   ticket: Ticket;
   rol: Rol | null;
   onClick: () => void;
+  onEstadoChange: (
+    ticketId: string,
+    nuevoEstado: Estado
+  ) => Promise<void>;
 }) {
+  const [cambiandoEstado, setCambiandoEstado] =
+    useState(false);
+
+  async function cambiarEstado(
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) {
+    e.stopPropagation();
+
+    const nuevoEstado = e.target.value as Estado;
+
+    if (nuevoEstado === ticket.estado) {
+      return;
+    }
+
+    setCambiandoEstado(true);
+
+    await onEstadoChange(ticket.id, nuevoEstado);
+
+    setCambiandoEstado(false);
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={styles.ticketRow}
-    >
+    <div style={styles.ticketRow} onClick={onClick}>
+      {/* INFORMACIÓN PRINCIPAL */}
+
       <div style={styles.ticketMain}>
         <div style={styles.ticketTopLine}>
-          <span
-            style={styles.ticketNumber}
-          >
-            {ticket.numero
-              ? `#${ticket.numero}`
-              : "Ticket"}
+          <span style={styles.ticketNumber}>
+            {ticket.numero ? `#${ticket.numero}` : "Ticket"}
           </span>
-
-          <StatusBadge
-            estado={ticket.estado}
-          />
-
-          <PriorityBadge
-            importancia={
-              ticket.importancia
-            }
-          />
         </div>
 
-        <h3 style={styles.ticketTitle}>
-          {ticket.titulo}
-        </h3>
+        <h3 style={styles.ticketTitle}>{ticket.titulo}</h3>
 
         <div style={styles.ticketMeta}>
           {rol === "ADMIN" && (
             <>
               <span>{ticket.nombre}</span>
 
-              <span style={styles.dot}>
-                •
-              </span>
+              <span style={styles.dot}>•</span>
 
-              <span>
-                {ticket.empresa}
-              </span>
+              <span>{ticket.empresa}</span>
 
-              <span style={styles.dot}>
-                •
-              </span>
+              <span style={styles.dot}>•</span>
             </>
           )}
 
-          <span>
-            {formatearFecha(
-              ticket.creado_en
-            )}
-          </span>
+          <span>{formatearFecha(ticket.creado_en)}</span>
         </div>
       </div>
 
-      <div style={styles.ticketArrow}>
-        <ChevronRightIcon />
+      {/* ZONA DERECHA */}
+
+      <div
+        style={styles.ticketActions}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* IMPORTANCIA */}
+
+        <div style={styles.actionBlock}>
+          <span style={styles.actionLabel}>Importancia</span>
+
+          <PriorityBadge importancia={ticket.importancia} />
+        </div>
+
+        {/* ESTADO */}
+
+        <div style={styles.actionBlock}>
+          <span style={styles.actionLabel}>Estado</span>
+
+          {rol === "ADMIN" ? (
+            <select
+              value={ticket.estado}
+              onChange={cambiarEstado}
+              disabled={cambiandoEstado}
+              style={{
+                ...styles.estadoSelect,
+                ...getEstadoSelectStyle(ticket.estado),
+                opacity: cambiandoEstado ? 0.6 : 1,
+                cursor: cambiandoEstado
+                  ? "not-allowed"
+                  : "pointer",
+              }}
+            >
+              <option value="PENDIENTE">● Pendiente</option>
+              <option value="EN_CURSO">● En curso</option>
+              <option value="RESUELTO">● Resuelto</option>
+            </select>
+          ) : (
+            <StatusBadge estado={ticket.estado} />
+          )}
+        </div>
+
+        {/* ABRIR */}
+
+        <button
+          type="button"
+          style={styles.openTicketButton}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          title="Abrir ticket"
+          aria-label="Abrir ticket"
+        >
+          <ChevronRightIcon />
+        </button>
       </div>
-    </button>
+    </div>
   );
 }
 
 /* =========================================================
-   BADGE ESTADO
+   ESTILO DEL SELECT DE ESTADO
+========================================================= */
+
+function getEstadoSelectStyle(
+  estado: Estado
+): React.CSSProperties {
+  if (estado === "PENDIENTE") {
+    return {
+      background: "#fff8ed",
+      borderColor: "#e8bd72",
+      color: "#9b661d",
+    };
+  }
+
+  if (estado === "EN_CURSO") {
+    return {
+      background: "#edf6ff",
+      borderColor: "#9dcaf3",
+      color: "#2374c6",
+    };
+  }
+
+  return {
+    background: "#edf9f6",
+    borderColor: "#9bd7c9",
+    color: "#16806c",
+  };
+}
+
+/* =========================================================
+   ESTADO PARA USUARIO
 ========================================================= */
 
 function StatusBadge({
@@ -859,20 +792,26 @@ function StatusBadge({
   const config = {
     PENDIENTE: {
       label: "Pendiente",
-      background: "#fff4e4",
+      background: "#fff8ed",
       color: "#9b661d",
+      border: "#e8bd72",
+      dot: "#d99525",
     },
 
     EN_CURSO: {
       label: "En curso",
-      background: "#e9f4ff",
+      background: "#edf6ff",
       color: "#2374c6",
+      border: "#9dcaf3",
+      dot: "#2374c6",
     },
 
     RESUELTO: {
       label: "Resuelto",
-      background: "#e8f7f3",
+      background: "#edf9f6",
       color: "#16806c",
+      border: "#9bd7c9",
+      dot: "#00a990",
     },
   };
 
@@ -881,19 +820,26 @@ function StatusBadge({
   return (
     <span
       style={{
-        ...styles.badge,
-        background:
-          current.background,
+        ...styles.statusBadge,
+        background: current.background,
         color: current.color,
+        borderColor: current.border,
       }}
     >
+      <span
+        style={{
+          ...styles.badgeDot,
+          background: current.dot,
+        }}
+      />
+
       {current.label}
     </span>
   );
 }
 
 /* =========================================================
-   BADGE IMPORTANCIA
+   IMPORTANCIA
 ========================================================= */
 
 function PriorityBadge({
@@ -904,49 +850,62 @@ function PriorityBadge({
   const config = {
     BAJA: {
       label: "Baja",
-      background: "#eff7f4",
-      color: "#4a8877",
+      background: "#eef8f5",
+      color: "#438472",
+      border: "#b9dfd5",
+      dot: "#4cab91",
     },
 
     MEDIA: {
       label: "Media",
       background: "#fff7e6",
-      color: "#a77819",
+      color: "#9b711d",
+      border: "#ead49c",
+      dot: "#e7ad2f",
     },
 
     ALTA: {
       label: "Alta",
       background: "#fff0e9",
-      color: "#c4602c",
+      color: "#b95829",
+      border: "#efc2ab",
+      dot: "#e77a3d",
     },
 
     URGENTE: {
       label: "Urgente",
       background: "#fff0f0",
-      color: "#c53f3f",
+      color: "#bd3e3e",
+      border: "#edb7b7",
+      dot: "#d94b4b",
     },
   };
 
-  const current =
-    config[importancia] ??
-    config.MEDIA;
+  const current = config[importancia] ?? config.MEDIA;
 
   return (
     <span
       style={{
-        ...styles.badge,
-        background:
-          current.background,
+        ...styles.priorityBadge,
+        background: current.background,
         color: current.color,
+        borderColor: current.border,
       }}
     >
-      {current.label}
+      <span
+        style={{
+          ...styles.badgeDot,
+          background: current.dot,
+        }}
+      />
+
+      Importancia: {current.label}
     </span>
   );
 }
 
 /* =========================================================
-   TARJETAS
+   TARJETAS SUPERIORES
 ========================================================= */
 
 function StatusCard({
@@ -956,10 +915,7 @@ function StatusCard({
   active,
   onClick,
 }: {
-  type:
-    | "pending"
-    | "progress"
-    | "resolved";
+  type: "pending" | "progress" | "resolved";
   title: string;
   number: number;
   active: boolean;
@@ -1012,55 +968,32 @@ function StatusCard({
           color: current.iconColor,
         }}
       >
-        {type === "pending" && (
-          <PendingIcon />
-        )}
-
-        {type === "progress" && (
-          <ProgressIcon />
-        )}
-
-        {type === "resolved" && (
-          <ResolvedIcon />
-        )}
+        {type === "pending" && <PendingIcon />}
+        {type === "progress" && <ProgressIcon />}
+        {type === "resolved" && <ResolvedIcon />}
       </div>
 
-      <div
-        style={styles.statusContent}
-      >
-        <span
-          style={styles.statusTitle}
-        >
-          {title}
-        </span>
+      <div style={styles.statusContent}>
+        <span style={styles.statusTitle}>{title}</span>
 
-        <strong
-          style={styles.statusNumber}
-        >
-          {number}
-        </strong>
+        <strong style={styles.statusNumber}>{number}</strong>
       </div>
     </button>
   );
 }
 
 /* =========================================================
-   FECHAS
+   FECHA
 ========================================================= */
 
-function formatearFecha(
-  fecha: string
-) {
-  return new Intl.DateTimeFormat(
-    "es-ES",
-    {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  ).format(new Date(fecha));
+function formatearFecha(fecha: string) {
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(fecha));
 }
 
 /* =========================================================
@@ -1119,11 +1052,7 @@ function ProgressIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <circle
-        cx="12"
-        cy="12"
-        r="3"
-      />
+      <circle cx="12" cy="12" r="3" />
 
       <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.1A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.4h4v.1a1.7 1.7 0 0 0 1 1.7 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4h-.1a1.7 1.7 0 0 0-1.7 1Z" />
     </svg>
@@ -1142,11 +1071,7 @@ function ResolvedIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-      />
+      <circle cx="12" cy="12" r="9" />
       <path d="m8 12 2.5 2.5L16 9" />
     </svg>
   );
@@ -1187,16 +1112,11 @@ function SearchIcon() {
         position: "absolute",
         left: "15px",
         top: "50%",
-        transform:
-          "translateY(-50%)",
+        transform: "translateY(-50%)",
         pointerEvents: "none",
       }}
     >
-      <circle
-        cx="11"
-        cy="11"
-        r="7"
-      />
+      <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.5-3.5" />
     </svg>
   );
@@ -1250,11 +1170,7 @@ function AlertIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-      />
+      <circle cx="12" cy="12" r="9" />
       <path d="M12 8v5" />
       <path d="M12 16h.01" />
     </svg>
@@ -1265,15 +1181,11 @@ function AlertIcon() {
    ESTILOS
 ========================================================= */
 
-const styles: Record<
-  string,
-  React.CSSProperties
-> = {
+const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#f5f7f7",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     color: "#202424",
   },
 
@@ -1285,8 +1197,7 @@ const styles: Record<
     gap: "14px",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
   },
 
   loadingText: {
@@ -1305,8 +1216,7 @@ const styles: Record<
 
   header: {
     background: "#ffffff",
-    borderBottom:
-      "1px solid #e8ecec",
+    borderBottom: "1px solid #e8ecec",
   },
 
   headerInner: {
@@ -1316,8 +1226,7 @@ const styles: Record<
     padding: "0 30px",
     display: "flex",
     alignItems: "center",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     gap: "30px",
   },
 
@@ -1398,8 +1307,7 @@ const styles: Record<
   topSection: {
     display: "flex",
     alignItems: "center",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     gap: "30px",
     marginBottom: "30px",
   },
@@ -1425,8 +1333,7 @@ const styles: Record<
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
@@ -1438,10 +1345,11 @@ const styles: Record<
     lineHeight: 1,
   },
 
+  /* TARJETAS */
+
   stats: {
     display: "grid",
-    gridTemplateColumns:
-      "repeat(3, 1fr)",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: "16px",
     marginBottom: "20px",
   },
@@ -1455,11 +1363,9 @@ const styles: Record<
     alignItems: "center",
     gap: "17px",
     textAlign: "left",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     cursor: "pointer",
-    transition:
-      "background 0.18s ease",
+    transition: "background 0.18s ease",
   },
 
   statusIcon: {
@@ -1491,6 +1397,8 @@ const styles: Record<
     fontWeight: 700,
   },
 
+  /* FILTROS */
+
   filtersCard: {
     background: "#ffffff",
     border: "1px solid #e5e9e9",
@@ -1508,16 +1416,13 @@ const styles: Record<
     width: "100%",
     boxSizing: "border-box",
     height: "44px",
-    border:
-      "1px solid #d9dede",
+    border: "1px solid #d9dede",
     borderRadius: "8px",
-    padding:
-      "0 15px 0 43px",
+    padding: "0 15px 0 43px",
     background: "#ffffff",
     color: "#303535",
     outlineColor: "#00AF9A",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "13px",
   },
 
@@ -1529,23 +1434,20 @@ const styles: Record<
   select: {
     width: "100%",
     height: "43px",
-    border:
-      "1px solid #d9dede",
+    border: "1px solid #d9dede",
     borderRadius: "8px",
     padding: "0 13px",
     background: "#ffffff",
     color: "#555d5d",
     outlineColor: "#00AF9A",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     cursor: "pointer",
   },
 
   errorMessage: {
     background: "#fff1f1",
-    border:
-      "1px solid #f0cece",
+    border: "1px solid #f0cece",
     color: "#a63d3d",
     borderRadius: "9px",
     padding: "12px 15px",
@@ -1556,6 +1458,8 @@ const styles: Record<
     fontSize: "11px",
   },
 
+  /* LISTADO */
+
   ticketsCard: {
     background: "#ffffff",
     border: "1px solid #e8ecec",
@@ -1565,12 +1469,10 @@ const styles: Record<
 
   cardHeader: {
     padding: "22px 24px",
-    borderBottom:
-      "1px solid #edf0f0",
+    borderBottom: "1px solid #edf0f0",
     display: "flex",
     alignItems: "center",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     gap: "20px",
   },
 
@@ -1590,8 +1492,7 @@ const styles: Record<
     border: "none",
     background: "transparent",
     color: "#00AF9A",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
@@ -1604,34 +1505,28 @@ const styles: Record<
 
   ticketRow: {
     width: "100%",
-    minHeight: "100px",
+    minHeight: "106px",
     boxSizing: "border-box",
-    border: "none",
-    borderBottom:
-      "1px solid #edf0f0",
+    borderBottom: "1px solid #edf0f0",
     background: "#ffffff",
     padding: "18px 22px",
     display: "flex",
     alignItems: "center",
-    justifyContent:
-      "space-between",
-    gap: "20px",
-    textAlign: "left",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    justifyContent: "space-between",
+    gap: "24px",
     cursor: "pointer",
   },
 
   ticketMain: {
     minWidth: 0,
+    flex: 1,
   },
 
   ticketTopLine: {
     display: "flex",
     alignItems: "center",
-    flexWrap: "wrap",
     gap: "7px",
-    marginBottom: "7px",
+    marginBottom: "6px",
   },
 
   ticketNumber: {
@@ -1660,21 +1555,90 @@ const styles: Record<
     color: "#c2c7c7",
   },
 
-  ticketArrow: {
-    color: "#a6adad",
+  /* ACCIONES DE LA FILA */
+
+  ticketActions: {
     display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "flex-end",
+    gap: "12px",
     flexShrink: 0,
   },
 
-  badge: {
-    borderRadius: "20px",
-    padding: "4px 8px",
+  actionBlock: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+
+  actionLabel: {
+    color: "#949b9b",
     fontSize: "9px",
+    fontWeight: 500,
+  },
+
+  estadoSelect: {
+    minWidth: "132px",
+    height: "36px",
+    boxSizing: "border-box",
+    border: "1px solid",
+    borderRadius: "8px",
+    padding: "0 10px",
+    outline: "none",
+    fontFamily: "'Poppins', Arial, sans-serif",
+    fontSize: "10px",
+    fontWeight: 600,
+  },
+
+  statusBadge: {
+    minWidth: "112px",
+    height: "36px",
+    boxSizing: "border-box",
+    border: "1px solid",
+    borderRadius: "8px",
+    padding: "0 11px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    fontSize: "10px",
     fontWeight: 600,
     whiteSpace: "nowrap",
   },
+
+  priorityBadge: {
+    height: "36px",
+    boxSizing: "border-box",
+    border: "1px solid",
+    borderRadius: "8px",
+    padding: "0 12px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    fontSize: "10px",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
+
+  badgeDot: {
+    width: "6px",
+    height: "6px",
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+
+  openTicketButton: {
+    width: "36px",
+    height: "36px",
+    border: "1px solid #e0e5e5",
+    borderRadius: "8px",
+    background: "#ffffff",
+    color: "#8b9292",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+  },
+
+  /* VACÍO */
 
   empty: {
     minHeight: "280px",
@@ -1715,8 +1679,7 @@ const styles: Record<
     borderRadius: "8px",
     background: "#ffffff",
     color: "#008f7e",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
