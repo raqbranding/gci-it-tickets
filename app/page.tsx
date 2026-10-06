@@ -125,6 +125,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="nombre@empresa.com"
+            autoComplete="email"
             style={{
               width: "100%",
               boxSizing: "border-box",
@@ -155,6 +156,7 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             placeholder="••••••••"
+            autoComplete="current-password"
             style={{
               width: "100%",
               boxSizing: "border-box",
