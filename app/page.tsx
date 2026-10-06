@@ -1,11 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 type Rol = "ADMIN" | "USUARIO";
-type EstadoFiltro = "TODOS" | "PENDIENTE" | "EN_CURSO" | "RESUELTO";
+type Estado = "PENDIENTE" | "EN_CURSO" | "RESUELTO";
+type EstadoFiltro = "TODOS" | Estado;
+type Importancia = "BAJA" | "MEDIA" | "ALTA" | "URGENTE";
+
+type Ticket = {
+  id: string;
+  numero: number | null;
+  creado_por: string;
+  nombre: string;
+  telefono: string | null;
+  email: string;
+  empresa: string;
+  titulo: string;
+  descripcion: string;
+  importancia: Importancia;
+  estado: Estado;
+  asignado_a: string | null;
+  creado_en: string;
+  actualizado_en: string;
+  resuelto_en: string | null;
+  resuelto_por: string | null;
+};
 
 export default function Home() {
   const router = useRouter();
@@ -13,6 +34,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [rol, setRol] = useState<Rol | null>(null);
   const [email, setEmail] = useState("");
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [errorCarga, setErrorCarga] = useState("");
 
   const [busqueda, setBusqueda] = useState("");
   const [fecha, setFecha] = useState("TODAS");
@@ -22,10 +45,13 @@ export default function Home() {
   const [orden, setOrden] = useState("RECIENTES");
 
   useEffect(() => {
-    comprobarUsuario();
+    cargarDatos();
   }, []);
 
-  async function comprobarUsuario() {
+  async function cargarDatos() {
+    setLoading(true);
+    setErrorCarga("");
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -35,20 +61,79 @@ export default function Home() {
       return;
     }
 
-    const { data: acceso, error } = await supabase
+    const { data: acceso, error: errorAcceso } = await supabase
       .from("it_usuarios")
       .select("rol, activo")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (error || !acceso || !acceso.activo) {
+    if (
+      errorAcceso ||
+      !acceso ||
+      !acceso.activo
+    ) {
       await supabase.auth.signOut();
       router.replace("/login");
       return;
     }
 
+    const rolUsuario = acceso.rol as Rol;
+
     setEmail(user.email ?? "");
-    setRol(acceso.rol as Rol);
+    setRol(rolUsuario);
+
+    /*
+      No hace falta filtrar manualmente por creado_por
+      para un usuario normal.
+
+      Las políticas RLS de Supabase ya hacen que:
+      - USUARIO vea únicamente sus tickets.
+      - ADMIN vea todos.
+    */
+
+    const { data: ticketsData, error: ticketsError } =
+      await supabase
+        .from("it_tickets")
+        .select(
+          `
+            id,
+            numero,
+            creado_por,
+            nombre,
+            telefono,
+            email,
+            empresa,
+            titulo,
+            descripcion,
+            importancia,
+            estado,
+            asignado_a,
+            creado_en,
+            actualizado_en,
+            resuelto_en,
+            resuelto_por
+          `
+        )
+        .order("creado_en", {
+          ascending: false,
+        });
+
+    if (ticketsError) {
+      console.error(
+        "Error cargando tickets:",
+        ticketsError
+      );
+
+      setErrorCarga(
+        `No se han podido cargar los tickets: ${ticketsError.message}`
+      );
+
+      setTickets([]);
+      setLoading(false);
+      return;
+    }
+
+    setTickets((ticketsData ?? []) as Ticket[]);
     setLoading(false);
   }
 
@@ -57,24 +142,207 @@ export default function Home() {
     router.replace("/login");
   }
 
-  function seleccionarEstado(nuevoEstado: EstadoFiltro) {
+  function seleccionarEstado(
+    nuevoEstado: Estado
+  ) {
     setEstado((actual) =>
-      actual === nuevoEstado ? "TODOS" : nuevoEstado
+      actual === nuevoEstado
+        ? "TODOS"
+        : nuevoEstado
     );
   }
+
+  /*
+    =========================================================
+    CONTADORES
+    =========================================================
+  */
+
+  const pendientes = tickets.filter(
+    (ticket) => ticket.estado === "PENDIENTE"
+  ).length;
+
+  const enCurso = tickets.filter(
+    (ticket) => ticket.estado === "EN_CURSO"
+  ).length;
+
+  const resueltos = tickets.filter(
+    (ticket) => ticket.estado === "RESUELTO"
+  ).length;
+
+  /*
+    =========================================================
+    FILTRADO
+    =========================================================
+  */
+
+  const ticketsFiltrados = useMemo(() => {
+    let resultado = [...tickets];
+
+    /*
+      ESTADO
+      Disponible tanto para ADMIN como para USUARIO.
+    */
+
+    if (estado !== "TODOS") {
+      resultado = resultado.filter(
+        (ticket) => ticket.estado === estado
+      );
+    }
+
+    /*
+      FECHA
+      Disponible tanto para ADMIN como para USUARIO.
+    */
+
+    if (fecha !== "TODAS") {
+      const ahora = new Date();
+
+      if (fecha === "HOY") {
+        resultado = resultado.filter(
+          (ticket) => {
+            const fechaTicket = new Date(
+              ticket.creado_en
+            );
+
+            return (
+              fechaTicket.getDate() ===
+                ahora.getDate() &&
+              fechaTicket.getMonth() ===
+                ahora.getMonth() &&
+              fechaTicket.getFullYear() ===
+                ahora.getFullYear()
+            );
+          }
+        );
+      }
+
+      if (fecha === "7_DIAS") {
+        const limite = new Date();
+
+        limite.setDate(
+          limite.getDate() - 7
+        );
+
+        resultado = resultado.filter(
+          (ticket) =>
+            new Date(ticket.creado_en) >=
+            limite
+        );
+      }
+
+      if (fecha === "30_DIAS") {
+        const limite = new Date();
+
+        limite.setDate(
+          limite.getDate() - 30
+        );
+
+        resultado = resultado.filter(
+          (ticket) =>
+            new Date(ticket.creado_en) >=
+            limite
+        );
+      }
+    }
+
+    /*
+      A PARTIR DE AQUÍ:
+      FILTROS SOLO PARA ADMIN
+    */
+
+    if (rol === "ADMIN") {
+      const texto =
+        busqueda.trim().toLowerCase();
+
+      if (texto) {
+        resultado = resultado.filter(
+          (ticket) =>
+            ticket.nombre
+              ?.toLowerCase()
+              .includes(texto) ||
+            ticket.empresa
+              ?.toLowerCase()
+              .includes(texto) ||
+            ticket.titulo
+              ?.toLowerCase()
+              .includes(texto) ||
+            ticket.email
+              ?.toLowerCase()
+              .includes(texto) ||
+            String(ticket.numero ?? "")
+              .toLowerCase()
+              .includes(texto)
+        );
+      }
+
+      if (importancia !== "TODAS") {
+        resultado = resultado.filter(
+          (ticket) =>
+            ticket.importancia ===
+            importancia
+        );
+      }
+
+      /*
+        TAG se conectará cuando creemos
+        it_tags / relación de tags.
+      */
+
+      if (tag !== "TODOS") {
+        // Preparado para la fase de tags.
+      }
+
+      resultado.sort((a, b) => {
+        const fechaA = new Date(
+          a.creado_en
+        ).getTime();
+
+        const fechaB = new Date(
+          b.creado_en
+        ).getTime();
+
+        if (orden === "ANTIGUOS") {
+          return fechaA - fechaB;
+        }
+
+        return fechaB - fechaA;
+      });
+    } else {
+      /*
+        Para usuario normal dejamos
+        siempre los más recientes primero.
+      */
+
+      resultado.sort(
+        (a, b) =>
+          new Date(
+            b.creado_en
+          ).getTime() -
+          new Date(
+            a.creado_en
+          ).getTime()
+      );
+    }
+
+    return resultado;
+  }, [
+    tickets,
+    estado,
+    fecha,
+    rol,
+    busqueda,
+    importancia,
+    tag,
+    orden,
+  ]);
 
   if (loading) {
     return (
       <main style={styles.loading}>
         <div style={styles.loader} />
 
-        <p
-          style={{
-            margin: 0,
-            color: "#7b8282",
-            fontSize: "13px",
-          }}
-        >
+        <p style={styles.loadingText}>
           Cargando...
         </p>
       </main>
@@ -95,7 +363,9 @@ export default function Home() {
             </div>
 
             <div>
-              <div style={styles.brandTitle}>IT Support</div>
+              <div style={styles.brandTitle}>
+                IT Support
+              </div>
 
               <div style={styles.brandSubtitle}>
                 Gestión de incidencias informáticas
@@ -105,10 +375,14 @@ export default function Home() {
 
           <div style={styles.userArea}>
             <div style={styles.userInfo}>
-              <span style={styles.email}>{email}</span>
+              <span style={styles.email}>
+                {email}
+              </span>
 
               <span style={styles.role}>
-                {rol === "ADMIN" ? "ADMINISTRADOR" : "USUARIO"}
+                {rol === "ADMIN"
+                  ? "ADMINISTRADOR"
+                  : "USUARIO"}
               </span>
             </div>
 
@@ -129,8 +403,6 @@ export default function Home() {
       ===================================================== */}
 
       <div style={styles.container}>
-        {/* TÍTULO + NUEVO TICKET */}
-
         <section style={styles.topSection}>
           <div>
             <h1 style={styles.pageTitle}>
@@ -148,14 +420,11 @@ export default function Home() {
 
           <button
             style={styles.newTicket}
-            onClick={() => router.push("/nuevo-ticket")}
+            onClick={() =>
+              router.push("/nuevo-ticket")
+            }
           >
-            <span
-              style={{
-                fontSize: "19px",
-                lineHeight: 1,
-              }}
-            >
+            <span style={styles.plus}>
               +
             </span>
 
@@ -164,32 +433,50 @@ export default function Home() {
         </section>
 
         {/* =====================================================
-            TARJETAS DE ESTADO
+            CONTADORES
         ===================================================== */}
 
         <section style={styles.stats}>
           <StatusCard
             type="pending"
             title="Pendientes"
-            number={0}
-            active={estado === "PENDIENTE"}
-            onClick={() => seleccionarEstado("PENDIENTE")}
+            number={pendientes}
+            active={
+              estado === "PENDIENTE"
+            }
+            onClick={() =>
+              seleccionarEstado(
+                "PENDIENTE"
+              )
+            }
           />
 
           <StatusCard
             type="progress"
             title="En curso"
-            number={0}
-            active={estado === "EN_CURSO"}
-            onClick={() => seleccionarEstado("EN_CURSO")}
+            number={enCurso}
+            active={
+              estado === "EN_CURSO"
+            }
+            onClick={() =>
+              seleccionarEstado(
+                "EN_CURSO"
+              )
+            }
           />
 
           <StatusCard
             type="resolved"
             title="Resueltos"
-            number={0}
-            active={estado === "RESUELTO"}
-            onClick={() => seleccionarEstado("RESUELTO")}
+            number={resueltos}
+            active={
+              estado === "RESUELTO"
+            }
+            onClick={() =>
+              seleccionarEstado(
+                "RESUELTO"
+              )
+            }
           />
         </section>
 
@@ -198,92 +485,170 @@ export default function Home() {
         ===================================================== */}
 
         <section style={styles.filtersCard}>
-          <div style={styles.searchWrapper}>
-            <SearchIcon />
+          {/* ===============================================
+              BUSCADOR SOLO ADMIN
+          =============================================== */}
 
-            <input
-              type="text"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder={
-                rol === "ADMIN"
-                  ? "Buscar por nombre, empresa, título o email..."
-                  : "Buscar en mis tickets..."
+          {rol === "ADMIN" && (
+            <div
+              style={
+                styles.searchWrapper
               }
-              style={styles.searchInput}
-            />
-          </div>
+            >
+              <SearchIcon />
 
-          <div style={styles.filtersGrid}>
-            {/* FECHA */}
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) =>
+                  setBusqueda(
+                    e.target.value
+                  )
+                }
+                placeholder="Buscar por nombre, empresa, título, email o número..."
+                style={
+                  styles.searchInput
+                }
+              />
+            </div>
+          )}
+
+          <div
+            style={{
+              ...styles.filtersGrid,
+              gridTemplateColumns:
+                rol === "ADMIN"
+                  ? "repeat(4, minmax(0, 1fr))"
+                  : "repeat(2, minmax(0, 1fr))",
+            }}
+          >
+            {/* FECHA - TODOS */}
 
             <select
               value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
+              onChange={(e) =>
+                setFecha(e.target.value)
+              }
               style={styles.select}
             >
-              <option value="TODAS">Todas las fechas</option>
-              <option value="HOY">Hoy</option>
-              <option value="7_DIAS">Últimos 7 días</option>
-              <option value="30_DIAS">Últimos 30 días</option>
+              <option value="TODAS">
+                Todas las fechas
+              </option>
+
+              <option value="HOY">
+                Hoy
+              </option>
+
+              <option value="7_DIAS">
+                Últimos 7 días
+              </option>
+
+              <option value="30_DIAS">
+                Últimos 30 días
+              </option>
             </select>
 
-            {/* IMPORTANCIA */}
-
-            <select
-              value={importancia}
-              onChange={(e) => setImportancia(e.target.value)}
-              style={styles.select}
-            >
-              <option value="TODAS">Toda importancia</option>
-              <option value="BAJA">Baja</option>
-              <option value="MEDIA">Media</option>
-              <option value="ALTA">Alta</option>
-              <option value="URGENTE">Urgente</option>
-            </select>
-
-            {/* ESTADO */}
+            {/* ESTADO - TODOS */}
 
             <select
               value={estado}
               onChange={(e) =>
-                setEstado(e.target.value as EstadoFiltro)
+                setEstado(
+                  e.target
+                    .value as EstadoFiltro
+                )
               }
               style={styles.select}
             >
-              <option value="TODOS">Todos los estados</option>
-              <option value="PENDIENTE">Pendiente</option>
-              <option value="EN_CURSO">En curso</option>
-              <option value="RESUELTO">Resuelto</option>
+              <option value="TODOS">
+                Todos los estados
+              </option>
+
+              <option value="PENDIENTE">
+                Pendiente
+              </option>
+
+              <option value="EN_CURSO">
+                En curso
+              </option>
+
+              <option value="RESUELTO">
+                Resuelto
+              </option>
             </select>
 
-            {/* TAGS - SOLO ADMIN */}
+            {/* IMPORTANCIA - SOLO ADMIN */}
 
             {rol === "ADMIN" && (
               <select
-                value={tag}
-                onChange={(e) => setTag(e.target.value)}
+                value={importancia}
+                onChange={(e) =>
+                  setImportancia(
+                    e.target.value
+                  )
+                }
                 style={styles.select}
               >
-                <option value="TODOS">Todos los tags</option>
+                <option value="TODAS">
+                  Toda importancia
+                </option>
+
+                <option value="BAJA">
+                  Baja
+                </option>
+
+                <option value="MEDIA">
+                  Media
+                </option>
+
+                <option value="ALTA">
+                  Alta
+                </option>
+
+                <option value="URGENTE">
+                  Urgente
+                </option>
               </select>
             )}
 
-            {/* ORDEN */}
+            {/* ORDEN - SOLO ADMIN */}
 
-            <select
-              value={orden}
-              onChange={(e) => setOrden(e.target.value)}
-              style={styles.select}
-            >
-              <option value="RECIENTES">Más recientes</option>
-              <option value="ANTIGUOS">Más antiguos</option>
-            </select>
+            {rol === "ADMIN" && (
+              <select
+                value={orden}
+                onChange={(e) =>
+                  setOrden(
+                    e.target.value
+                  )
+                }
+                style={styles.select}
+              >
+                <option value="RECIENTES">
+                  Más recientes
+                </option>
+
+                <option value="ANTIGUOS">
+                  Más antiguos
+                </option>
+              </select>
+            )}
           </div>
         </section>
 
         {/* =====================================================
-            LISTADO DE TICKETS
+            ERROR
+        ===================================================== */}
+
+        {errorCarga && (
+          <div style={styles.errorMessage}>
+            <AlertIcon />
+
+            <span>{errorCarga}</span>
+          </div>
+        )}
+
+        {/* =====================================================
+            LISTADO
         ===================================================== */}
 
         <section style={styles.ticketsCard}>
@@ -291,55 +656,113 @@ export default function Home() {
             <div>
               <h2 style={styles.cardTitle}>
                 {rol === "ADMIN"
-                  ? "Todos los tickets"
+                  ? "Tickets"
                   : "Mis tickets"}
               </h2>
 
-              <p style={styles.cardDescription}>
-                {estado === "TODOS"
-                  ? rol === "ADMIN"
-                    ? "Incidencias registradas en IT Support"
-                    : "Incidencias que has enviado a Informática"
-                  : `Mostrando tickets: ${nombreEstado(estado)}`}
+              <p
+                style={
+                  styles.cardDescription
+                }
+              >
+                {ticketsFiltrados.length ===
+                1
+                  ? "1 incidencia"
+                  : `${ticketsFiltrados.length} incidencias`}
               </p>
             </div>
 
-            {estado !== "TODOS" && (
+            {(estado !== "TODOS" ||
+              fecha !== "TODAS" ||
+              (rol === "ADMIN" &&
+                (busqueda ||
+                  importancia !==
+                    "TODAS" ||
+                  orden !==
+                    "RECIENTES"))) && (
               <button
-                onClick={() => setEstado("TODOS")}
-                style={styles.clearFilter}
+                onClick={() => {
+                  setEstado("TODOS");
+                  setFecha("TODAS");
+                  setBusqueda("");
+                  setImportancia(
+                    "TODAS"
+                  );
+                  setTag("TODOS");
+                  setOrden(
+                    "RECIENTES"
+                  );
+                }}
+                style={
+                  styles.clearFilter
+                }
               >
-                Quitar filtro
+                Limpiar filtros
               </button>
             )}
           </div>
 
-          {/* ESTADO VACÍO */}
+          {ticketsFiltrados.length ===
+          0 ? (
+            <div style={styles.empty}>
+              <div
+                style={styles.emptyIcon}
+              >
+                <TicketIcon />
+              </div>
 
-          <div style={styles.empty}>
-            <div style={styles.emptyIcon}>
-              <TicketIcon />
+              <h3
+                style={styles.emptyTitle}
+              >
+                {tickets.length === 0
+                  ? "No hay tickets todavía"
+                  : "No hay resultados"}
+              </h3>
+
+              <p style={styles.emptyText}>
+                {tickets.length === 0
+                  ? rol === "ADMIN"
+                    ? "Cuando los usuarios creen incidencias aparecerán aquí."
+                    : "Cuando crees tu primera incidencia aparecerá aquí."
+                  : "No hay incidencias que coincidan con los filtros seleccionados."}
+              </p>
+
+              {rol !== "ADMIN" &&
+                tickets.length === 0 && (
+                  <button
+                    style={
+                      styles.secondaryButton
+                    }
+                    onClick={() =>
+                      router.push(
+                        "/nuevo-ticket"
+                      )
+                    }
+                  >
+                    Crear mi primer ticket
+                  </button>
+                )}
             </div>
-
-            <h3 style={styles.emptyTitle}>
-              No hay tickets todavía
-            </h3>
-
-            <p style={styles.emptyText}>
-              {rol === "ADMIN"
-                ? "Cuando los usuarios creen incidencias aparecerán aquí."
-                : "Cuando crees tu primera incidencia aparecerá aquí."}
-            </p>
-
-            {rol !== "ADMIN" && (
-              <button
-                style={styles.secondaryButton}
-                onClick={() => router.push("/nuevo-ticket")}
-              >
-                Crear mi primer ticket
-              </button>
-            )}
-          </div>
+          ) : (
+            <div
+              style={styles.ticketList}
+            >
+              {ticketsFiltrados.map(
+                (ticket) => (
+                  <TicketRow
+                    key={ticket.id}
+                    ticket={ticket}
+                    rol={rol}
+                    onClick={() =>
+                      router.push(
+                        `/tickets/${ticket.id}`
+                      )
+                    }
+                  />
+                )
+              )}
+            </div>
+          )}
         </section>
       </div>
     </main>
@@ -347,7 +770,183 @@ export default function Home() {
 }
 
 /* =========================================================
-   TARJETAS DE ESTADO
+   FILA DE TICKET
+========================================================= */
+
+function TicketRow({
+  ticket,
+  rol,
+  onClick,
+}: {
+  ticket: Ticket;
+  rol: Rol | null;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={styles.ticketRow}
+    >
+      <div style={styles.ticketMain}>
+        <div style={styles.ticketTopLine}>
+          <span
+            style={styles.ticketNumber}
+          >
+            {ticket.numero
+              ? `#${ticket.numero}`
+              : "Ticket"}
+          </span>
+
+          <StatusBadge
+            estado={ticket.estado}
+          />
+
+          <PriorityBadge
+            importancia={
+              ticket.importancia
+            }
+          />
+        </div>
+
+        <h3 style={styles.ticketTitle}>
+          {ticket.titulo}
+        </h3>
+
+        <div style={styles.ticketMeta}>
+          {rol === "ADMIN" && (
+            <>
+              <span>{ticket.nombre}</span>
+
+              <span style={styles.dot}>
+                •
+              </span>
+
+              <span>
+                {ticket.empresa}
+              </span>
+
+              <span style={styles.dot}>
+                •
+              </span>
+            </>
+          )}
+
+          <span>
+            {formatearFecha(
+              ticket.creado_en
+            )}
+          </span>
+        </div>
+      </div>
+
+      <div style={styles.ticketArrow}>
+        <ChevronRightIcon />
+      </div>
+    </button>
+  );
+}
+
+/* =========================================================
+   BADGE ESTADO
+========================================================= */
+
+function StatusBadge({
+  estado,
+}: {
+  estado: Estado;
+}) {
+  const config = {
+    PENDIENTE: {
+      label: "Pendiente",
+      background: "#fff4e4",
+      color: "#9b661d",
+    },
+
+    EN_CURSO: {
+      label: "En curso",
+      background: "#e9f4ff",
+      color: "#2374c6",
+    },
+
+    RESUELTO: {
+      label: "Resuelto",
+      background: "#e8f7f3",
+      color: "#16806c",
+    },
+  };
+
+  const current = config[estado];
+
+  return (
+    <span
+      style={{
+        ...styles.badge,
+        background:
+          current.background,
+        color: current.color,
+      }}
+    >
+      {current.label}
+    </span>
+  );
+}
+
+/* =========================================================
+   BADGE IMPORTANCIA
+========================================================= */
+
+function PriorityBadge({
+  importancia,
+}: {
+  importancia: Importancia;
+}) {
+  const config = {
+    BAJA: {
+      label: "Baja",
+      background: "#eff7f4",
+      color: "#4a8877",
+    },
+
+    MEDIA: {
+      label: "Media",
+      background: "#fff7e6",
+      color: "#a77819",
+    },
+
+    ALTA: {
+      label: "Alta",
+      background: "#fff0e9",
+      color: "#c4602c",
+    },
+
+    URGENTE: {
+      label: "Urgente",
+      background: "#fff0f0",
+      color: "#c53f3f",
+    },
+  };
+
+  const current =
+    config[importancia] ??
+    config.MEDIA;
+
+  return (
+    <span
+      style={{
+        ...styles.badge,
+        background:
+          current.background,
+        color: current.color,
+      }}
+    >
+      {current.label}
+    </span>
+  );
+}
+
+/* =========================================================
+   TARJETAS
 ========================================================= */
 
 function StatusCard({
@@ -357,7 +956,10 @@ function StatusCard({
   active,
   onClick,
 }: {
-  type: "pending" | "progress" | "resolved";
+  type:
+    | "pending"
+    | "progress"
+    | "resolved";
   title: string;
   number: number;
   active: boolean;
@@ -399,7 +1001,6 @@ function StatusCard({
         background: active
           ? current.activeBackground
           : current.background,
-        border: "1px solid transparent",
       }}
     >
       <div
@@ -411,19 +1012,31 @@ function StatusCard({
           color: current.iconColor,
         }}
       >
-        {type === "pending" && <PendingIcon />}
+        {type === "pending" && (
+          <PendingIcon />
+        )}
 
-        {type === "progress" && <ProgressIcon />}
+        {type === "progress" && (
+          <ProgressIcon />
+        )}
 
-        {type === "resolved" && <ResolvedIcon />}
+        {type === "resolved" && (
+          <ResolvedIcon />
+        )}
       </div>
 
-      <div style={styles.statusContent}>
-        <span style={styles.statusTitle}>
+      <div
+        style={styles.statusContent}
+      >
+        <span
+          style={styles.statusTitle}
+        >
           {title}
         </span>
 
-        <strong style={styles.statusNumber}>
+        <strong
+          style={styles.statusNumber}
+        >
           {number}
         </strong>
       </div>
@@ -432,7 +1045,26 @@ function StatusCard({
 }
 
 /* =========================================================
-   ICONO SUPPORT
+   FECHAS
+========================================================= */
+
+function formatearFecha(
+  fecha: string
+) {
+  return new Intl.DateTimeFormat(
+    "es-ES",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  ).format(new Date(fecha));
+}
+
+/* =========================================================
+   ICONOS
 ========================================================= */
 
 function SupportIcon() {
@@ -448,19 +1080,12 @@ function SupportIcon() {
       strokeLinejoin="round"
     >
       <path d="M4 13a8 8 0 0 1 16 0" />
-
       <path d="M18 19c0 1.1-.9 2-2 2h-3" />
-
       <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
-
       <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
     </svg>
   );
 }
-
-/* =========================================================
-   ICONO PENDIENTES
-========================================================= */
 
 function PendingIcon() {
   return (
@@ -475,19 +1100,12 @@ function PendingIcon() {
       strokeLinejoin="round"
     >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
-
       <path d="M14 2v6h6" />
-
       <path d="M8 13h8" />
-
       <path d="M8 17h5" />
     </svg>
   );
 }
-
-/* =========================================================
-   ICONO EN CURSO
-========================================================= */
 
 function ProgressIcon() {
   return (
@@ -512,10 +1130,6 @@ function ProgressIcon() {
   );
 }
 
-/* =========================================================
-   ICONO RESUELTO
-========================================================= */
-
 function ResolvedIcon() {
   return (
     <svg
@@ -533,15 +1147,10 @@ function ResolvedIcon() {
         cy="12"
         r="9"
       />
-
       <path d="m8 12 2.5 2.5L16 9" />
     </svg>
   );
 }
-
-/* =========================================================
-   ICONO TICKET
-========================================================= */
 
 function TicketIcon() {
   return (
@@ -556,19 +1165,12 @@ function TicketIcon() {
       strokeLinejoin="round"
     >
       <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-
       <path d="M13 5v2" />
-
       <path d="M13 11v2" />
-
       <path d="M13 17v2" />
     </svg>
   );
 }
-
-/* =========================================================
-   ICONO BUSCAR
-========================================================= */
 
 function SearchIcon() {
   return (
@@ -585,7 +1187,8 @@ function SearchIcon() {
         position: "absolute",
         left: "15px",
         top: "50%",
-        transform: "translateY(-50%)",
+        transform:
+          "translateY(-50%)",
         pointerEvents: "none",
       }}
     >
@@ -594,15 +1197,10 @@ function SearchIcon() {
         cy="11"
         r="7"
       />
-
       <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }
-
-/* =========================================================
-   ICONO LOGOUT
-========================================================= */
 
 function LogoutIcon() {
   return (
@@ -617,43 +1215,65 @@ function LogoutIcon() {
       strokeLinejoin="round"
     >
       <path d="M10 17l5-5-5-5" />
-
       <path d="M15 12H3" />
-
       <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
     </svg>
   );
 }
 
-/* =========================================================
-   NOMBRE ESTADO
-========================================================= */
+function ChevronRightIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
 
-function nombreEstado(estado: EstadoFiltro) {
-  if (estado === "PENDIENTE") {
-    return "Pendientes";
-  }
-
-  if (estado === "EN_CURSO") {
-    return "En curso";
-  }
-
-  if (estado === "RESUELTO") {
-    return "Resueltos";
-  }
-
-  return "Todos";
+function AlertIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
+      <path d="M12 8v5" />
+      <path d="M12 16h.01" />
+    </svg>
+  );
 }
 
 /* =========================================================
    ESTILOS
 ========================================================= */
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: "100vh",
     background: "#f5f7f7",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     color: "#202424",
   },
 
@@ -665,7 +1285,14 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "14px",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+  },
+
+  loadingText: {
+    margin: 0,
+    color: "#7b8282",
+    fontSize: "13px",
   },
 
   loader: {
@@ -678,7 +1305,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   header: {
     background: "#ffffff",
-    borderBottom: "1px solid #e8ecec",
+    borderBottom:
+      "1px solid #e8ecec",
   },
 
   headerInner: {
@@ -688,7 +1316,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "0 30px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "30px",
   },
 
@@ -769,7 +1398,8 @@ const styles: Record<string, React.CSSProperties> = {
   topSection: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "30px",
     marginBottom: "30px",
   },
@@ -795,34 +1425,41 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
 
-  /* TARJETAS */
+  plus: {
+    fontSize: "19px",
+    lineHeight: 1,
+  },
 
   stats: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
+    gridTemplateColumns:
+      "repeat(3, 1fr)",
     gap: "16px",
     marginBottom: "20px",
   },
 
   statusCard: {
     minHeight: "96px",
+    border: "1px solid transparent",
     borderRadius: "13px",
     padding: "18px 20px",
     display: "flex",
     alignItems: "center",
     gap: "17px",
     textAlign: "left",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     cursor: "pointer",
     transition:
-      "background 0.18s ease, transform 0.18s ease",
+      "background 0.18s ease",
   },
 
   statusIcon: {
@@ -833,7 +1470,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-    transition: "background 0.18s ease",
   },
 
   statusContent: {
@@ -855,8 +1491,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
   },
 
-  /* FILTROS */
-
   filtersCard: {
     background: "#ffffff",
     border: "1px solid #e5e9e9",
@@ -874,38 +1508,53 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     boxSizing: "border-box",
     height: "44px",
-    border: "1px solid #d9dede",
+    border:
+      "1px solid #d9dede",
     borderRadius: "8px",
-    padding: "0 15px 0 43px",
+    padding:
+      "0 15px 0 43px",
     background: "#ffffff",
     color: "#303535",
     outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "13px",
   },
 
   filtersGrid: {
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(160px, 1fr))",
     gap: "10px",
   },
 
   select: {
     width: "100%",
     height: "43px",
-    border: "1px solid #d9dede",
+    border:
+      "1px solid #d9dede",
     borderRadius: "8px",
     padding: "0 13px",
     background: "#ffffff",
     color: "#555d5d",
     outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     cursor: "pointer",
   },
 
-  /* LISTADO */
+  errorMessage: {
+    background: "#fff1f1",
+    border:
+      "1px solid #f0cece",
+    color: "#a63d3d",
+    borderRadius: "9px",
+    padding: "12px 15px",
+    marginBottom: "20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+    fontSize: "11px",
+  },
 
   ticketsCard: {
     background: "#ffffff",
@@ -916,10 +1565,12 @@ const styles: Record<string, React.CSSProperties> = {
 
   cardHeader: {
     padding: "22px 24px",
-    borderBottom: "1px solid #edf0f0",
+    borderBottom:
+      "1px solid #edf0f0",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "20px",
   },
 
@@ -939,10 +1590,90 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     background: "transparent",
     color: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
+  },
+
+  ticketList: {
+    display: "flex",
+    flexDirection: "column",
+  },
+
+  ticketRow: {
+    width: "100%",
+    minHeight: "100px",
+    boxSizing: "border-box",
+    border: "none",
+    borderBottom:
+      "1px solid #edf0f0",
+    background: "#ffffff",
+    padding: "18px 22px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent:
+      "space-between",
+    gap: "20px",
+    textAlign: "left",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    cursor: "pointer",
+  },
+
+  ticketMain: {
+    minWidth: 0,
+  },
+
+  ticketTopLine: {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "7px",
+    marginBottom: "7px",
+  },
+
+  ticketNumber: {
+    color: "#8a9191",
+    fontSize: "10px",
+    fontWeight: 600,
+  },
+
+  ticketTitle: {
+    margin: "0 0 7px",
+    color: "#252929",
+    fontSize: "14px",
+    fontWeight: 600,
+  },
+
+  ticketMeta: {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "6px",
+    color: "#8a9191",
+    fontSize: "10px",
+  },
+
+  dot: {
+    color: "#c2c7c7",
+  },
+
+  ticketArrow: {
+    color: "#a6adad",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  badge: {
+    borderRadius: "20px",
+    padding: "4px 8px",
+    fontSize: "9px",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
   },
 
   empty: {
@@ -984,7 +1715,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "8px",
     background: "#ffffff",
     color: "#008f7e",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
