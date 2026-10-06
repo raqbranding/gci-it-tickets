@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 type Rol = "ADMIN" | "USUARIO";
+type EstadoFiltro = "TODOS" | "PENDIENTE" | "EN_CURSO" | "RESUELTO";
 
 export default function Home() {
   const router = useRouter();
@@ -12,6 +13,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [rol, setRol] = useState<Rol | null>(null);
   const [email, setEmail] = useState("");
+
+  const [busqueda, setBusqueda] = useState("");
+  const [fecha, setFecha] = useState("TODAS");
+  const [importancia, setImportancia] = useState("TODAS");
+  const [estado, setEstado] = useState<EstadoFiltro>("TODOS");
+  const [tag, setTag] = useState("TODOS");
+  const [orden, setOrden] = useState("RECIENTES");
 
   useEffect(() => {
     comprobarUsuario();
@@ -49,11 +57,24 @@ export default function Home() {
     router.replace("/login");
   }
 
+  function seleccionarEstado(nuevoEstado: EstadoFiltro) {
+    setEstado((actual) =>
+      actual === nuevoEstado ? "TODOS" : nuevoEstado
+    );
+  }
+
   if (loading) {
     return (
       <main style={styles.loading}>
-        <div style={styles.loader}></div>
-        <p style={{ margin: 0, color: "#7b8282", fontSize: "13px" }}>
+        <div style={styles.loader} />
+
+        <p
+          style={{
+            margin: 0,
+            color: "#7b8282",
+            fontSize: "13px",
+          }}
+        >
           Cargando...
         </p>
       </main>
@@ -66,13 +87,14 @@ export default function Home() {
       <header style={styles.header}>
         <div style={styles.headerInner}>
           <div style={styles.brand}>
-            <div style={styles.icon}>
+            <div style={styles.logoIcon}>
               <SupportIcon />
             </div>
 
             <div>
-              <div style={styles.title}>IT Support</div>
-              <div style={styles.subtitle}>
+              <div style={styles.brandTitle}>IT Support</div>
+
+              <div style={styles.brandSubtitle}>
                 Gestión de incidencias informáticas
               </div>
             </div>
@@ -101,10 +123,13 @@ export default function Home() {
 
       {/* CONTENIDO */}
       <div style={styles.container}>
+        {/* CABECERA DE PÁGINA */}
         <section style={styles.topSection}>
           <div>
             <h1 style={styles.pageTitle}>
-              {rol === "ADMIN" ? "Gestión de tickets" : "Mis incidencias"}
+              {rol === "ADMIN"
+                ? "Gestión de tickets"
+                : "Mis incidencias"}
             </h1>
 
             <p style={styles.pageDescription}>
@@ -118,51 +143,160 @@ export default function Home() {
             style={styles.newTicket}
             onClick={() => router.push("/nuevo-ticket")}
           >
-            <span style={{ fontSize: "19px", lineHeight: 1 }}>+</span>
+            <span
+              style={{
+                fontSize: "19px",
+                lineHeight: 1,
+              }}
+            >
+              +
+            </span>
+
             Nuevo ticket
           </button>
         </section>
 
-        {/* RESUMEN */}
+        {/* TARJETAS DE ESTADO */}
         <section style={styles.stats}>
-          <StatCard
-            number="0"
-            label={rol === "ADMIN" ? "Pendientes" : "Tickets pendientes"}
+          <StatusCard
+            type="pending"
+            title="Pendientes"
+            number={0}
+            active={estado === "PENDIENTE"}
+            onClick={() => seleccionarEstado("PENDIENTE")}
           />
 
-          <StatCard
-            number="0"
-            label={rol === "ADMIN" ? "En curso" : "Tickets en curso"}
+          <StatusCard
+            type="progress"
+            title="En curso"
+            number={0}
+            active={estado === "EN_CURSO"}
+            onClick={() => seleccionarEstado("EN_CURSO")}
           />
 
-          <StatCard
-            number="0"
-            label={rol === "ADMIN" ? "Resueltos" : "Tickets resueltos"}
+          <StatusCard
+            type="resolved"
+            title="Resueltos"
+            number={0}
+            active={estado === "RESUELTO"}
+            onClick={() => seleccionarEstado("RESUELTO")}
           />
         </section>
 
+        {/* FILTROS */}
+        <section style={styles.filtersCard}>
+          <div style={styles.searchWrapper}>
+            <SearchIcon />
+
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder={
+                rol === "ADMIN"
+                  ? "Buscar por nombre, empresa, título o email..."
+                  : "Buscar en mis tickets..."
+              }
+              style={styles.searchInput}
+            />
+          </div>
+
+          <div style={styles.filtersGrid}>
+            <select
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              style={styles.select}
+            >
+              <option value="TODAS">Todas las fechas</option>
+              <option value="HOY">Hoy</option>
+              <option value="7_DIAS">Últimos 7 días</option>
+              <option value="30_DIAS">Últimos 30 días</option>
+            </select>
+
+            <select
+              value={importancia}
+              onChange={(e) => setImportancia(e.target.value)}
+              style={styles.select}
+            >
+              <option value="TODAS">Toda importancia</option>
+              <option value="BAJA">Baja</option>
+              <option value="MEDIA">Media</option>
+              <option value="ALTA">Alta</option>
+              <option value="URGENTE">Urgente</option>
+            </select>
+
+            <select
+              value={estado}
+              onChange={(e) =>
+                setEstado(e.target.value as EstadoFiltro)
+              }
+              style={styles.select}
+            >
+              <option value="TODOS">Todos los estados</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="EN_CURSO">En curso</option>
+              <option value="RESUELTO">Resuelto</option>
+            </select>
+
+            {rol === "ADMIN" && (
+              <select
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                style={styles.select}
+              >
+                <option value="TODOS">Todos los tags</option>
+              </select>
+            )}
+
+            <select
+              value={orden}
+              onChange={(e) => setOrden(e.target.value)}
+              style={styles.select}
+            >
+              <option value="RECIENTES">Más recientes</option>
+              <option value="ANTIGUOS">Más antiguos</option>
+            </select>
+          </div>
+        </section>
+
         {/* LISTADO */}
-        <section style={styles.card}>
+        <section style={styles.ticketsCard}>
           <div style={styles.cardHeader}>
             <div>
               <h2 style={styles.cardTitle}>
-                {rol === "ADMIN" ? "Todos los tickets" : "Mis tickets"}
+                {rol === "ADMIN"
+                  ? "Todos los tickets"
+                  : "Mis tickets"}
               </h2>
 
               <p style={styles.cardDescription}>
-                {rol === "ADMIN"
-                  ? "Incidencias registradas en IT Support"
-                  : "Incidencias que has enviado a Informática"}
+                {estado === "TODOS"
+                  ? rol === "ADMIN"
+                    ? "Incidencias registradas en IT Support"
+                    : "Incidencias que has enviado a Informática"
+                  : `Mostrando tickets: ${nombreEstado(estado)}`}
               </p>
             </div>
+
+            {estado !== "TODOS" && (
+              <button
+                onClick={() => setEstado("TODOS")}
+                style={styles.clearFilter}
+              >
+                Quitar filtro
+              </button>
+            )}
           </div>
 
+          {/* ESTADO VACÍO */}
           <div style={styles.empty}>
             <div style={styles.emptyIcon}>
               <TicketIcon />
             </div>
 
-            <h3 style={styles.emptyTitle}>No hay tickets todavía</h3>
+            <h3 style={styles.emptyTitle}>
+              No hay tickets todavía
+            </h3>
 
             <p style={styles.emptyText}>
               {rol === "ADMIN"
@@ -185,20 +319,85 @@ export default function Home() {
   );
 }
 
-function StatCard({
+/* =========================================================
+   TARJETA DE ESTADO
+========================================================= */
+
+function StatusCard({
+  type,
+  title,
   number,
-  label,
+  active,
+  onClick,
 }: {
-  number: string;
-  label: string;
+  type: "pending" | "progress" | "resolved";
+  title: string;
+  number: number;
+  active: boolean;
+  onClick: () => void;
 }) {
+  const config = {
+    pending: {
+      background:
+        "linear-gradient(110deg, #fff7ec 0%, #fffaf4 100%)",
+      iconBackground: "#fff0dc",
+      iconColor: "#252525",
+    },
+
+    progress: {
+      background:
+        "linear-gradient(110deg, #eef7ff 0%, #f6faff 100%)",
+      iconBackground: "#dfefff",
+      iconColor: "#1479ff",
+    },
+
+    resolved: {
+      background:
+        "linear-gradient(110deg, #eefbf8 0%, #f5fcfa 100%)",
+      iconBackground: "#dcf6f0",
+      iconColor: "#00a990",
+    },
+  };
+
+  const current = config[type];
+
   return (
-    <div style={styles.statCard}>
-      <div style={styles.statNumber}>{number}</div>
-      <div style={styles.statLabel}>{label}</div>
-    </div>
+    <button
+      onClick={onClick}
+      style={{
+        ...styles.statusCard,
+        background: current.background,
+        border: active
+          ? "1px solid #00AF9A"
+          : "1px solid transparent",
+        boxShadow: active
+          ? "0 0 0 2px rgba(0,175,154,0.08)"
+          : "none",
+      }}
+    >
+      <div
+        style={{
+          ...styles.statusIcon,
+          background: current.iconBackground,
+          color: current.iconColor,
+        }}
+      >
+        {type === "pending" && <PendingIcon />}
+        {type === "progress" && <ProgressIcon />}
+        {type === "resolved" && <ResolvedIcon />}
+      </div>
+
+      <div style={styles.statusContent}>
+        <span style={styles.statusTitle}>{title}</span>
+        <strong style={styles.statusNumber}>{number}</strong>
+      </div>
+    </button>
   );
 }
+
+/* =========================================================
+   ICONOS
+========================================================= */
 
 function SupportIcon() {
   return (
@@ -220,11 +419,67 @@ function SupportIcon() {
   );
 }
 
-function TicketIcon() {
+function PendingIcon() {
+  return (
+    <svg
+      width="25"
+      height="25"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8" />
+      <path d="M8 17h5" />
+    </svg>
+  );
+}
+
+function ProgressIcon() {
+  return (
+    <svg
+      width="27"
+      height="27"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.1A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.4h4v.1a1.7 1.7 0 0 0 1 1.7 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4h-.1a1.7 1.7 0 0 0-1.7 1Z" />
+    </svg>
+  );
+}
+
+function ResolvedIcon() {
   return (
     <svg
       width="26"
       height="26"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12 2.5 2.5L16 9" />
+    </svg>
+  );
+}
+
+function TicketIcon() {
+  return (
+    <svg
+      width="27"
+      height="27"
       viewBox="0 0 24 24"
       fill="none"
       stroke="#00AF9A"
@@ -234,8 +489,33 @@ function TicketIcon() {
     >
       <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
       <path d="M13 5v2" />
-      <path d="M13 17v2" />
       <path d="M13 11v2" />
+      <path d="M13 17v2" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#9ba2a2"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        position: "absolute",
+        left: "15px",
+        top: "50%",
+        transform: "translateY(-50%)",
+        pointerEvents: "none",
+      }}
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }
@@ -258,6 +538,22 @@ function LogoutIcon() {
     </svg>
   );
 }
+
+/* =========================================================
+   TEXTO DE ESTADO
+========================================================= */
+
+function nombreEstado(estado: EstadoFiltro) {
+  if (estado === "PENDIENTE") return "Pendientes";
+  if (estado === "EN_CURSO") return "En curso";
+  if (estado === "RESUELTO") return "Resueltos";
+
+  return "Todos";
+}
+
+/* =========================================================
+   ESTILOS
+========================================================= */
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -308,7 +604,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "14px",
   },
 
-  icon: {
+  logoIcon: {
     width: "44px",
     height: "44px",
     borderRadius: "11px",
@@ -319,13 +615,13 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
 
-  title: {
+  brandTitle: {
     fontSize: "17px",
     fontWeight: 700,
     lineHeight: 1.2,
   },
 
-  subtitle: {
+  brandSubtitle: {
     marginTop: "4px",
     fontSize: "11px",
     color: "#8a9191",
@@ -415,30 +711,99 @@ const styles: Record<string, React.CSSProperties> = {
   stats: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
-    gap: "18px",
-    marginBottom: "24px",
+    gap: "16px",
+    marginBottom: "20px",
   },
 
-  statCard: {
-    background: "#ffffff",
-    border: "1px solid #e8ecec",
+  statusCard: {
+    minHeight: "96px",
     borderRadius: "13px",
-    padding: "22px",
+    padding: "18px 20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "17px",
+    textAlign: "left",
+    fontFamily: "'Poppins', Arial, sans-serif",
+    cursor: "pointer",
   },
 
-  statNumber: {
-    fontSize: "27px",
-    fontWeight: 700,
-    lineHeight: 1,
-    marginBottom: "8px",
+  statusIcon: {
+    width: "52px",
+    height: "52px",
+    borderRadius: "14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
 
-  statLabel: {
-    color: "#7b8282",
+  statusContent: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+
+  statusTitle: {
+    color: "#303535",
     fontSize: "12px",
+    fontWeight: 500,
   },
 
-  card: {
+  statusNumber: {
+    color: "#202424",
+    fontSize: "25px",
+    lineHeight: 1,
+    fontWeight: 700,
+  },
+
+  filtersCard: {
+    background: "#ffffff",
+    border: "1px solid #e5e9e9",
+    borderRadius: "13px",
+    padding: "16px",
+    marginBottom: "20px",
+  },
+
+  searchWrapper: {
+    position: "relative",
+    marginBottom: "12px",
+  },
+
+  searchInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    height: "44px",
+    border: "1px solid #d9dede",
+    borderRadius: "8px",
+    padding: "0 15px 0 43px",
+    background: "#ffffff",
+    color: "#303535",
+    outlineColor: "#00AF9A",
+    fontFamily: "'Poppins', Arial, sans-serif",
+    fontSize: "13px",
+  },
+
+  filtersGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: "10px",
+  },
+
+  select: {
+    width: "100%",
+    height: "43px",
+    border: "1px solid #d9dede",
+    borderRadius: "8px",
+    padding: "0 13px",
+    background: "#ffffff",
+    color: "#555d5d",
+    outlineColor: "#00AF9A",
+    fontFamily: "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
+    cursor: "pointer",
+  },
+
+  ticketsCard: {
     background: "#ffffff",
     border: "1px solid #e8ecec",
     borderRadius: "14px",
@@ -448,6 +813,10 @@ const styles: Record<string, React.CSSProperties> = {
   cardHeader: {
     padding: "22px 24px",
     borderBottom: "1px solid #edf0f0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "20px",
   },
 
   cardTitle: {
@@ -462,8 +831,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "11px",
   },
 
+  clearFilter: {
+    border: "none",
+    background: "transparent",
+    color: "#00AF9A",
+    fontFamily: "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
   empty: {
-    minHeight: "310px",
+    minHeight: "280px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
