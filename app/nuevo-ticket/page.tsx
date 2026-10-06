@@ -10,6 +10,9 @@ export default function NuevoTicketPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+
+  const [userId, setUserId] = useState("");
   const [emailSesion, setEmailSesion] = useState("");
 
   const [nombre, setNombre] = useState("");
@@ -22,6 +25,11 @@ export default function NuevoTicketPage() {
     useState<Importancia>("MEDIA");
 
   const [archivos, setArchivos] = useState<File[]>([]);
+
+  const [mensaje, setMensaje] = useState("");
+  const [tipoMensaje, setTipoMensaje] = useState<
+    "ERROR" | "OK" | ""
+  >("");
 
   useEffect(() => {
     comprobarUsuario();
@@ -51,8 +59,10 @@ export default function NuevoTicketPage() {
 
     const correo = user.email ?? "";
 
+    setUserId(user.id);
     setEmailSesion(correo);
     setEmail(correo);
+
     setLoading(false);
   }
 
@@ -78,22 +88,87 @@ export default function NuevoTicketPage() {
     );
   }
 
-  function enviarTicket(e: React.FormEvent<HTMLFormElement>) {
+  async function enviarTicket(
+    e: React.FormEvent<HTMLFormElement>
+  ) {
     e.preventDefault();
 
-    /*
-      EN EL SIGUIENTE PASO CONECTAREMOS ESTO A SUPABASE.
+    if (enviando) return;
 
-      El ticket se creará automáticamente como:
+    setMensaje("");
+    setTipoMensaje("");
 
-      estado = PENDIENTE
+    if (!userId) {
+      setTipoMensaje("ERROR");
+      setMensaje(
+        "No hemos podido identificar tu usuario. Vuelve a iniciar sesión."
+      );
+      return;
+    }
 
-      y guardaremos también el usuario autenticado.
-    */
+    if (
+      !nombre.trim() ||
+      !empresa.trim() ||
+      !email.trim() ||
+      !titulo.trim() ||
+      !descripcion.trim()
+    ) {
+      setTipoMensaje("ERROR");
+      setMensaje(
+        "Completa todos los campos obligatorios antes de enviar el ticket."
+      );
+      return;
+    }
 
-    alert(
-      "Formulario preparado. En el siguiente paso conectaremos el envío a Supabase."
-    );
+    setEnviando(true);
+
+    try {
+      const { error } = await supabase
+        .from("it_tickets")
+        .insert({
+          creado_por: userId,
+          nombre: nombre.trim(),
+          telefono: telefono.trim() || null,
+          email: email.trim(),
+          empresa: empresa.trim(),
+          titulo: titulo.trim(),
+          descripcion: descripcion.trim(),
+          importancia,
+          estado: "PENDIENTE",
+          asignado_a: null,
+          resuelto_en: null,
+          resuelto_por: null,
+        });
+
+      if (error) {
+        console.error("Error creando ticket:", error);
+
+        setTipoMensaje("ERROR");
+        setMensaje(
+          `No se ha podido crear el ticket: ${error.message}`
+        );
+
+        setEnviando(false);
+        return;
+      }
+
+      setTipoMensaje("OK");
+      setMensaje("Incidencia enviada correctamente.");
+
+      setTimeout(() => {
+        router.push("/");
+        router.refresh();
+      }, 900);
+    } catch (error) {
+      console.error(error);
+
+      setTipoMensaje("ERROR");
+      setMensaje(
+        "Ha ocurrido un error inesperado al crear el ticket."
+      );
+
+      setEnviando(false);
+    }
   }
 
   if (loading) {
@@ -116,7 +191,9 @@ export default function NuevoTicketPage() {
 
   return (
     <main style={styles.page}>
-      {/* CABECERA */}
+      {/* =====================================================
+          CABECERA
+      ===================================================== */}
 
       <header style={styles.header}>
         <div style={styles.headerInner}>
@@ -129,7 +206,9 @@ export default function NuevoTicketPage() {
             </div>
 
             <div style={styles.brandText}>
-              <div style={styles.brandTitle}>IT Support</div>
+              <div style={styles.brandTitle}>
+                IT Support
+              </div>
 
               <div style={styles.brandSubtitle}>
                 Gestión de incidencias informáticas
@@ -143,11 +222,11 @@ export default function NuevoTicketPage() {
         </div>
       </header>
 
-      {/* CONTENIDO */}
+      {/* =====================================================
+          CONTENIDO
+      ===================================================== */}
 
       <div style={styles.container}>
-        {/* VOLVER */}
-
         <button
           type="button"
           onClick={() => router.push("/")}
@@ -157,24 +236,22 @@ export default function NuevoTicketPage() {
           Volver a tickets
         </button>
 
-        {/* TÍTULO */}
-
         <div style={styles.pageHeading}>
           <h1 style={styles.pageTitle}>
             Nueva incidencia
           </h1>
 
           <p style={styles.pageDescription}>
-            Cuéntanos qué problema estás teniendo. Informática
-            recibirá tu solicitud y podrás seguir su estado desde
-            IT Support.
+            Cuéntanos qué problema estás teniendo.
+            Informática recibirá tu solicitud y podrás
+            seguir su estado desde IT Support.
           </p>
         </div>
 
-        {/* FORMULARIO */}
-
         <form onSubmit={enviarTicket}>
-          {/* DATOS DE CONTACTO */}
+          {/* =================================================
+              DATOS DE CONTACTO
+          ================================================= */}
 
           <section style={styles.card}>
             <div style={styles.cardHeading}>
@@ -188,8 +265,8 @@ export default function NuevoTicketPage() {
                 </h2>
 
                 <p style={styles.cardSubtitle}>
-                  Indica cómo podemos localizarte si necesitamos
-                  más información.
+                  Indica cómo podemos localizarte si
+                  necesitamos más información.
                 </p>
               </div>
             </div>
@@ -257,7 +334,9 @@ export default function NuevoTicketPage() {
             </div>
           </section>
 
-          {/* INCIDENCIA */}
+          {/* =================================================
+              INCIDENCIA
+          ================================================= */}
 
           <section style={styles.card}>
             <div style={styles.cardHeading}>
@@ -271,7 +350,8 @@ export default function NuevoTicketPage() {
                 </h2>
 
                 <p style={styles.cardSubtitle}>
-                  Describe el problema con el mayor detalle posible.
+                  Describe el problema con el mayor
+                  detalle posible.
                 </p>
               </div>
             </div>
@@ -308,7 +388,9 @@ export default function NuevoTicketPage() {
                 />
               </Field>
 
-              {/* IMPORTANCIA */}
+              {/* =============================================
+                  IMPORTANCIA
+              ============================================= */}
 
               <Field
                 label="Importancia"
@@ -319,7 +401,9 @@ export default function NuevoTicketPage() {
                     label="Baja"
                     description="No impide trabajar"
                     value="BAJA"
-                    selected={importancia === "BAJA"}
+                    selected={
+                      importancia === "BAJA"
+                    }
                     onClick={() =>
                       setImportancia("BAJA")
                     }
@@ -329,7 +413,9 @@ export default function NuevoTicketPage() {
                     label="Media"
                     description="Afecta al trabajo"
                     value="MEDIA"
-                    selected={importancia === "MEDIA"}
+                    selected={
+                      importancia === "MEDIA"
+                    }
                     onClick={() =>
                       setImportancia("MEDIA")
                     }
@@ -339,7 +425,9 @@ export default function NuevoTicketPage() {
                     label="Alta"
                     description="Impide una tarea importante"
                     value="ALTA"
-                    selected={importancia === "ALTA"}
+                    selected={
+                      importancia === "ALTA"
+                    }
                     onClick={() =>
                       setImportancia("ALTA")
                     }
@@ -349,7 +437,9 @@ export default function NuevoTicketPage() {
                     label="Urgente"
                     description="Bloqueo crítico"
                     value="URGENTE"
-                    selected={importancia === "URGENTE"}
+                    selected={
+                      importancia === "URGENTE"
+                    }
                     onClick={() =>
                       setImportancia("URGENTE")
                     }
@@ -357,7 +447,9 @@ export default function NuevoTicketPage() {
                 </div>
               </Field>
 
-              {/* ARCHIVOS */}
+              {/* =============================================
+                  ARCHIVOS
+              ============================================= */}
 
               <Field label="Fotografías o capturas">
                 <label style={styles.uploadArea}>
@@ -370,8 +462,9 @@ export default function NuevoTicketPage() {
                   </strong>
 
                   <span style={styles.uploadText}>
-                    Puedes adjuntar hasta 5 fotografías o capturas
-                    que ayuden a entender la incidencia.
+                    Puedes adjuntar hasta 5 fotografías
+                    o capturas que ayuden a entender la
+                    incidencia.
                   </span>
 
                   <span style={styles.uploadButton}>
@@ -383,47 +476,69 @@ export default function NuevoTicketPage() {
                     accept="image/*"
                     multiple
                     onChange={seleccionarArchivos}
-                    style={{ display: "none" }}
+                    style={{
+                      display: "none",
+                    }}
                   />
                 </label>
 
                 {archivos.length > 0 && (
                   <div style={styles.fileList}>
-                    {archivos.map((archivo, index) => (
-                      <div
-                        key={`${archivo.name}-${index}`}
-                        style={styles.fileItem}
-                      >
-                        <div style={styles.fileInfo}>
-                          <div style={styles.fileIcon}>
-                            <ImageIcon />
-                          </div>
-
-                          <div style={styles.fileText}>
-                            <strong style={styles.fileName}>
-                              {archivo.name}
-                            </strong>
-
-                            <span style={styles.fileSize}>
-                              {formatearTamano(
-                                archivo.size
-                              )}
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            eliminarArchivo(index)
-                          }
-                          style={styles.removeFile}
-                          aria-label="Eliminar archivo"
+                    {archivos.map(
+                      (archivo, index) => (
+                        <div
+                          key={`${archivo.name}-${index}`}
+                          style={styles.fileItem}
                         >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+                          <div
+                            style={styles.fileInfo}
+                          >
+                            <div
+                              style={styles.fileIcon}
+                            >
+                              <ImageIcon />
+                            </div>
+
+                            <div
+                              style={styles.fileText}
+                            >
+                              <strong
+                                style={
+                                  styles.fileName
+                                }
+                              >
+                                {archivo.name}
+                              </strong>
+
+                              <span
+                                style={
+                                  styles.fileSize
+                                }
+                              >
+                                {formatearTamano(
+                                  archivo.size
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              eliminarArchivo(
+                                index
+                              )
+                            }
+                            style={
+                              styles.removeFile
+                            }
+                            aria-label="Eliminar archivo"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )
+                    )}
                   </div>
                 )}
 
@@ -434,23 +549,65 @@ export default function NuevoTicketPage() {
             </div>
           </section>
 
-          {/* ACCIONES */}
+          {/* =================================================
+              MENSAJE
+          ================================================= */}
+
+          {mensaje && (
+            <div
+              style={{
+                ...styles.message,
+                ...(tipoMensaje === "OK"
+                  ? styles.successMessage
+                  : styles.errorMessage),
+              }}
+            >
+              {tipoMensaje === "OK" ? (
+                <CheckIcon />
+              ) : (
+                <AlertIcon />
+              )}
+
+              <span>{mensaje}</span>
+            </div>
+          )}
+
+          {/* =================================================
+              BOTONES
+          ================================================= */}
 
           <div style={styles.actions}>
             <button
               type="button"
               onClick={() => router.push("/")}
               style={styles.cancelButton}
+              disabled={enviando}
             >
               Cancelar
             </button>
 
             <button
               type="submit"
-              style={styles.submitButton}
+              style={{
+                ...styles.submitButton,
+                opacity: enviando ? 0.65 : 1,
+                cursor: enviando
+                  ? "not-allowed"
+                  : "pointer",
+              }}
+              disabled={enviando}
             >
-              <SendIcon />
-              Enviar ticket
+              {enviando ? (
+                <>
+                  <SmallLoader />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <SendIcon />
+                  Enviar ticket
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -478,7 +635,10 @@ function Field({
         {label}
 
         {required && (
-          <span style={styles.required}> *</span>
+          <span style={styles.required}>
+            {" "}
+            *
+          </span>
         )}
       </label>
 
@@ -707,6 +867,58 @@ function SendIcon() {
       <path d="m22 2-7 20-4-9-9-4Z" />
       <path d="M22 2 11 13" />
     </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12 2.5 2.5L16 9" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v5" />
+      <path d="M12 16h.01" />
+    </svg>
+  );
+}
+
+function SmallLoader() {
+  return (
+    <span
+      style={{
+        width: "14px",
+        height: "14px",
+        border: "2px solid rgba(255,255,255,0.45)",
+        borderTopColor: "#ffffff",
+        borderRadius: "50%",
+        display: "inline-block",
+      }}
+    />
   );
 }
 
@@ -1131,6 +1343,31 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "right",
   },
 
+  message: {
+    minHeight: "48px",
+    boxSizing: "border-box",
+    borderRadius: "9px",
+    padding: "12px 15px",
+    marginTop: "4px",
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+    fontSize: "11px",
+    fontWeight: 500,
+  },
+
+  successMessage: {
+    background: "#eaf8f4",
+    border: "1px solid #c9ebe2",
+    color: "#087965",
+  },
+
+  errorMessage: {
+    background: "#fff1f1",
+    border: "1px solid #f0cece",
+    color: "#a63d3d",
+  },
+
   actions: {
     display: "flex",
     alignItems: "center",
@@ -1161,10 +1398,10 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#ffffff",
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: "8px",
     fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     fontWeight: 600,
-    cursor: "pointer",
   },
 };
