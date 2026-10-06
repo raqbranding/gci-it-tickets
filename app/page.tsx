@@ -83,7 +83,10 @@ export default function Home() {
 
   return (
     <main style={styles.page}>
-      {/* CABECERA */}
+      {/* =====================================================
+          CABECERA
+      ===================================================== */}
+
       <header style={styles.header}>
         <div style={styles.headerInner}>
           <div style={styles.brand}>
@@ -121,9 +124,13 @@ export default function Home() {
         </div>
       </header>
 
-      {/* CONTENIDO */}
+      {/* =====================================================
+          CONTENIDO
+      ===================================================== */}
+
       <div style={styles.container}>
-        {/* CABECERA DE PÁGINA */}
+        {/* TÍTULO + NUEVO TICKET */}
+
         <section style={styles.topSection}>
           <div>
             <h1 style={styles.pageTitle}>
@@ -156,7 +163,10 @@ export default function Home() {
           </button>
         </section>
 
-        {/* TARJETAS DE ESTADO */}
+        {/* =====================================================
+            TARJETAS DE ESTADO
+        ===================================================== */}
+
         <section style={styles.stats}>
           <StatusCard
             type="pending"
@@ -183,7 +193,10 @@ export default function Home() {
           />
         </section>
 
-        {/* FILTROS */}
+        {/* =====================================================
+            FILTROS
+        ===================================================== */}
+
         <section style={styles.filtersCard}>
           <div style={styles.searchWrapper}>
             <SearchIcon />
@@ -202,6 +215,8 @@ export default function Home() {
           </div>
 
           <div style={styles.filtersGrid}>
+            {/* FECHA */}
+
             <select
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
@@ -212,6 +227,8 @@ export default function Home() {
               <option value="7_DIAS">Últimos 7 días</option>
               <option value="30_DIAS">Últimos 30 días</option>
             </select>
+
+            {/* IMPORTANCIA */}
 
             <select
               value={importancia}
@@ -224,6 +241,8 @@ export default function Home() {
               <option value="ALTA">Alta</option>
               <option value="URGENTE">Urgente</option>
             </select>
+
+            {/* ESTADO */}
 
             <select
               value={estado}
@@ -238,6 +257,8 @@ export default function Home() {
               <option value="RESUELTO">Resuelto</option>
             </select>
 
+            {/* TAGS - SOLO ADMIN */}
+
             {rol === "ADMIN" && (
               <select
                 value={tag}
@@ -247,6 +268,8 @@ export default function Home() {
                 <option value="TODOS">Todos los tags</option>
               </select>
             )}
+
+            {/* ORDEN */}
 
             <select
               value={orden}
@@ -259,7 +282,10 @@ export default function Home() {
           </div>
         </section>
 
-        {/* LISTADO */}
+        {/* =====================================================
+            LISTADO DE TICKETS
+        ===================================================== */}
+
         <section style={styles.ticketsCard}>
           <div style={styles.cardHeader}>
             <div>
@@ -289,6 +315,7 @@ export default function Home() {
           </div>
 
           {/* ESTADO VACÍO */}
+
           <div style={styles.empty}>
             <div style={styles.emptyIcon}>
               <TicketIcon />
@@ -320,7 +347,7 @@ export default function Home() {
 }
 
 /* =========================================================
-   TARJETA DE ESTADO
+   TARJETAS DE ESTADO
 ========================================================= */
 
 function StatusCard({
@@ -338,23 +365,26 @@ function StatusCard({
 }) {
   const config = {
     pending: {
-      background:
-        "linear-gradient(110deg, #fff7ec 0%, #fffaf4 100%)",
+      background: "#fff8ef",
+      activeBackground: "#f8e6ce",
       iconBackground: "#fff0dc",
+      activeIconBackground: "#f3d6b1",
       iconColor: "#252525",
     },
 
     progress: {
-      background:
-        "linear-gradient(110deg, #eef7ff 0%, #f6faff 100%)",
+      background: "#f1f8ff",
+      activeBackground: "#dcecff",
       iconBackground: "#dfefff",
+      activeIconBackground: "#c5e0ff",
       iconColor: "#1479ff",
     },
 
     resolved: {
-      background:
-        "linear-gradient(110deg, #eefbf8 0%, #f5fcfa 100%)",
+      background: "#f0fbf8",
+      activeBackground: "#d6f1eb",
       iconBackground: "#dcf6f0",
+      activeIconBackground: "#bee8df",
       iconColor: "#00a990",
     },
   };
@@ -366,37 +396,43 @@ function StatusCard({
       onClick={onClick}
       style={{
         ...styles.statusCard,
-        background: current.background,
-        border: active
-          ? "1px solid #00AF9A"
-          : "1px solid transparent",
-        boxShadow: active
-          ? "0 0 0 2px rgba(0,175,154,0.08)"
-          : "none",
+        background: active
+          ? current.activeBackground
+          : current.background,
+        border: "1px solid transparent",
       }}
     >
       <div
         style={{
           ...styles.statusIcon,
-          background: current.iconBackground,
+          background: active
+            ? current.activeIconBackground
+            : current.iconBackground,
           color: current.iconColor,
         }}
       >
         {type === "pending" && <PendingIcon />}
+
         {type === "progress" && <ProgressIcon />}
+
         {type === "resolved" && <ResolvedIcon />}
       </div>
 
       <div style={styles.statusContent}>
-        <span style={styles.statusTitle}>{title}</span>
-        <strong style={styles.statusNumber}>{number}</strong>
+        <span style={styles.statusTitle}>
+          {title}
+        </span>
+
+        <strong style={styles.statusNumber}>
+          {number}
+        </strong>
       </div>
     </button>
   );
 }
 
 /* =========================================================
-   ICONOS
+   ICONO SUPPORT
 ========================================================= */
 
 function SupportIcon() {
@@ -412,12 +448,19 @@ function SupportIcon() {
       strokeLinejoin="round"
     >
       <path d="M4 13a8 8 0 0 1 16 0" />
+
       <path d="M18 19c0 1.1-.9 2-2 2h-3" />
+
       <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
+
       <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
     </svg>
   );
 }
+
+/* =========================================================
+   ICONO PENDIENTES
+========================================================= */
 
 function PendingIcon() {
   return (
@@ -432,12 +475,19 @@ function PendingIcon() {
       strokeLinejoin="round"
     >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+
       <path d="M14 2v6h6" />
+
       <path d="M8 13h8" />
+
       <path d="M8 17h5" />
     </svg>
   );
 }
+
+/* =========================================================
+   ICONO EN CURSO
+========================================================= */
 
 function ProgressIcon() {
   return (
@@ -451,11 +501,20 @@ function ProgressIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+      <circle
+        cx="12"
+        cy="12"
+        r="3"
+      />
+
       <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.1A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.4h4v.1a1.7 1.7 0 0 0 1 1.7 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4h-.1a1.7 1.7 0 0 0-1.7 1Z" />
     </svg>
   );
 }
+
+/* =========================================================
+   ICONO RESUELTO
+========================================================= */
 
 function ResolvedIcon() {
   return (
@@ -469,11 +528,20 @@ function ResolvedIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <circle cx="12" cy="12" r="9" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
+
       <path d="m8 12 2.5 2.5L16 9" />
     </svg>
   );
 }
+
+/* =========================================================
+   ICONO TICKET
+========================================================= */
 
 function TicketIcon() {
   return (
@@ -488,12 +556,19 @@ function TicketIcon() {
       strokeLinejoin="round"
     >
       <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+
       <path d="M13 5v2" />
+
       <path d="M13 11v2" />
+
       <path d="M13 17v2" />
     </svg>
   );
 }
+
+/* =========================================================
+   ICONO BUSCAR
+========================================================= */
 
 function SearchIcon() {
   return (
@@ -514,11 +589,20 @@ function SearchIcon() {
         pointerEvents: "none",
       }}
     >
-      <circle cx="11" cy="11" r="7" />
+      <circle
+        cx="11"
+        cy="11"
+        r="7"
+      />
+
       <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }
+
+/* =========================================================
+   ICONO LOGOUT
+========================================================= */
 
 function LogoutIcon() {
   return (
@@ -533,20 +617,30 @@ function LogoutIcon() {
       strokeLinejoin="round"
     >
       <path d="M10 17l5-5-5-5" />
+
       <path d="M15 12H3" />
+
       <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
     </svg>
   );
 }
 
 /* =========================================================
-   TEXTO DE ESTADO
+   NOMBRE ESTADO
 ========================================================= */
 
 function nombreEstado(estado: EstadoFiltro) {
-  if (estado === "PENDIENTE") return "Pendientes";
-  if (estado === "EN_CURSO") return "En curso";
-  if (estado === "RESUELTO") return "Resueltos";
+  if (estado === "PENDIENTE") {
+    return "Pendientes";
+  }
+
+  if (estado === "EN_CURSO") {
+    return "En curso";
+  }
+
+  if (estado === "RESUELTO") {
+    return "Resueltos";
+  }
 
   return "Todos";
 }
@@ -708,6 +802,8 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
+  /* TARJETAS */
+
   stats: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
@@ -725,6 +821,8 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "left",
     fontFamily: "'Poppins', Arial, sans-serif",
     cursor: "pointer",
+    transition:
+      "background 0.18s ease, transform 0.18s ease",
   },
 
   statusIcon: {
@@ -735,6 +833,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+    transition: "background 0.18s ease",
   },
 
   statusContent: {
@@ -755,6 +854,8 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1,
     fontWeight: 700,
   },
+
+  /* FILTROS */
 
   filtersCard: {
     background: "#ffffff",
@@ -785,7 +886,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   filtersGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(160px, 1fr))",
     gap: "10px",
   },
 
@@ -802,6 +904,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "11px",
     cursor: "pointer",
   },
+
+  /* LISTADO */
 
   ticketsCard: {
     background: "#ffffff",
