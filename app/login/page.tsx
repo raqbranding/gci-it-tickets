@@ -18,62 +18,38 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // 1. LOGIN
+    // INICIAR SESIÓN
     const { data, error: loginError } =
       await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-    if (loginError) {
-      setError("ERROR LOGIN: " + loginError.message);
+    if (loginError || !data.user) {
+      setError("Correo electrónico o contraseña incorrectos.");
       setLoading(false);
       return;
     }
 
-    if (!data.user) {
-      setError("ERROR: Supabase no ha devuelto ningún usuario.");
-      setLoading(false);
-      return;
-    }
-
-    // 2. COMPROBAR ACCESO A IT TICKETS
+    // COMPROBAR ACCESO A IT SUPPORT
     const { data: acceso, error: accesoError } = await supabase
       .from("it_usuarios")
-      .select("user_id, rol, activo")
+      .select("rol, activo")
       .eq("user_id", data.user.id)
       .maybeSingle();
 
-    // Mostrar temporalmente el error REAL
-    if (accesoError) {
+    if (accesoError || !acceso || !acceso.activo) {
+      await supabase.auth.signOut();
+
       setError(
-        "ERROR ACCESO: " +
-          accesoError.message +
-          " | Código: " +
-          accesoError.code
+        "Tu usuario no tiene acceso al sistema de incidencias informáticas."
       );
 
       setLoading(false);
       return;
     }
 
-    if (!acceso) {
-      setError(
-        "ERROR: Login correcto, pero Supabase no encuentra este UID en it_usuarios. UID: " +
-          data.user.id
-      );
-
-      setLoading(false);
-      return;
-    }
-
-    if (!acceso.activo) {
-      setError("ERROR: El usuario existe en it_usuarios pero está inactivo.");
-      setLoading(false);
-      return;
-    }
-
-    // 3. TODO CORRECTO
+    // ACCESO CORRECTO
     router.push("/");
     router.refresh();
   }
@@ -100,6 +76,7 @@ export default function LoginPage() {
           boxShadow: "0 10px 35px rgba(0,0,0,0.07)",
         }}
       >
+        {/* ICONO SUPPORT */}
         <div
           style={{
             width: "62px",
@@ -228,9 +205,8 @@ export default function LoginPage() {
                 color: "#b42318",
                 borderRadius: "8px",
                 fontFamily: "'Poppins', Arial, sans-serif",
-                fontSize: "12px",
+                fontSize: "13px",
                 lineHeight: "1.5",
-                wordBreak: "break-word",
               }}
             >
               {error}
