@@ -6,6 +6,7 @@ export const EMPRESAS = [
   "Expressate",
   "La Rocca",
   "Emotions café",
+  "Polymat Solutions",
   "Empire teas",
   "Cafés Civit",
 ] as const;
