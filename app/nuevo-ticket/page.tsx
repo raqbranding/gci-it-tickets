@@ -1,41 +1,74 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  useEffect,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import { EMPRESAS } from "../../lib/empresas";
 
-type Importancia = "BAJA" | "MEDIA" | "ALTA" | "URGENTE";
+type Rol = "ADMIN" | "USUARIO";
+type Importancia =
+  | "BAJA"
+  | "MEDIA"
+  | "ALTA"
+  | "URGENTE";
 
 export default function NuevoTicketPage() {
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [enviando, setEnviando] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [userId, setUserId] = useState("");
-  const [emailSesion, setEmailSesion] = useState("");
+  const [guardando, setGuardando] =
+    useState(false);
 
-  const [nombre, setNombre] = useState("");
-  const [empresa, setEmpresa] = useState("");
-  const [email, setEmail] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [titulo, setTitulo] = useState("");
-  const [descripcion, setDescripcion] = useState("");
+  const [rol, setRol] =
+    useState<Rol | null>(null);
+
+  const [userId, setUserId] =
+    useState("");
+
+  const [userEmail, setUserEmail] =
+    useState("");
+
+  const [nombre, setNombre] =
+    useState("");
+
+  const [empresa, setEmpresa] =
+    useState("");
+
+  const [email, setEmail] =
+    useState("");
+
+  const [telefono, setTelefono] =
+    useState("");
+
+  const [titulo, setTitulo] =
+    useState("");
+
+  const [descripcion, setDescripcion] =
+    useState("");
+
   const [importancia, setImportancia] =
-    useState<Importancia>("MEDIA");
+    useState<Importancia>("BAJA");
 
-  const [archivos, setArchivos] = useState<File[]>([]);
+  const [imagenes, setImagenes] =
+    useState<File[]>([]);
 
-  const [mensaje, setMensaje] = useState("");
-  const [tipoMensaje, setTipoMensaje] = useState<
-    "ERROR" | "OK" | ""
-  >("");
+  const [error, setError] =
+    useState("");
 
   useEffect(() => {
-    comprobarUsuario();
+    cargarUsuario();
   }, []);
 
-  async function comprobarUsuario() {
+  async function cargarUsuario() {
+    setLoading(true);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -45,569 +78,804 @@ export default function NuevoTicketPage() {
       return;
     }
 
-    const { data: acceso, error } = await supabase
+    const {
+      data: acceso,
+      error: accesoError,
+    } = await supabase
       .from("it_usuarios")
-      .select("activo")
+      .select("rol, activo")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (error || !acceso || !acceso.activo) {
+    if (
+      accesoError ||
+      !acceso ||
+      !acceso.activo
+    ) {
       await supabase.auth.signOut();
       router.replace("/login");
       return;
     }
 
-    const correo = user.email ?? "";
-
     setUserId(user.id);
-    setEmailSesion(correo);
-    setEmail(correo);
+    setUserEmail(user.email ?? "");
+    setEmail(user.email ?? "");
+    setRol(acceso.rol as Rol);
 
     setLoading(false);
   }
 
-  function seleccionarArchivos(
-    e: React.ChangeEvent<HTMLInputElement>
+  function seleccionarImagenes(
+    event: ChangeEvent<HTMLInputElement>
   ) {
-    if (!e.target.files) return;
+    const seleccionadas = Array.from(
+      event.target.files ?? []
+    );
 
-    const nuevos = Array.from(e.target.files);
+    setError("");
 
-    setArchivos((actuales) => {
-      const combinados = [...actuales, ...nuevos];
+    const permitidos = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
 
-      return combinados.slice(0, 5);
-    });
+    const incorrectas =
+      seleccionadas.filter(
+        (archivo) =>
+          !permitidos.includes(
+            archivo.type
+          )
+      );
 
-    e.target.value = "";
+    if (incorrectas.length > 0) {
+      setError(
+        "Solo se pueden adjuntar imágenes JPG, PNG o WEBP."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    const grandes =
+      seleccionadas.filter(
+        (archivo) =>
+          archivo.size >
+          10 * 1024 * 1024
+      );
+
+    if (grandes.length > 0) {
+      setError(
+        "Cada imagen puede tener un tamaño máximo de 10 MB."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    setImagenes((actuales) => [
+      ...actuales,
+      ...seleccionadas,
+    ]);
+
+    event.target.value = "";
   }
 
-  function eliminarArchivo(index: number) {
-    setArchivos((actuales) =>
-      actuales.filter((_, i) => i !== index)
+  function quitarImagen(
+    index: number
+  ) {
+    setImagenes((actuales) =>
+      actuales.filter(
+        (_, i) => i !== index
+      )
     );
   }
 
-  async function enviarTicket(
-    e: React.FormEvent<HTMLFormElement>
+  async function crearTicket(
+    event: FormEvent
   ) {
-    e.preventDefault();
+    event.preventDefault();
 
-    if (enviando) return;
+    if (guardando) return;
 
-    setMensaje("");
-    setTipoMensaje("");
+    setError("");
 
-    if (!userId) {
-      setTipoMensaje("ERROR");
-      setMensaje(
-        "No hemos podido identificar tu usuario. Vuelve a iniciar sesión."
+    if (!nombre.trim()) {
+      setError(
+        "Introduce el nombre."
       );
       return;
     }
 
-    if (
-      !nombre.trim() ||
-      !empresa.trim() ||
-      !email.trim() ||
-      !titulo.trim() ||
-      !descripcion.trim()
-    ) {
-      setTipoMensaje("ERROR");
-      setMensaje(
-        "Completa todos los campos obligatorios antes de enviar el ticket."
+    if (!empresa) {
+      setError(
+        "Selecciona una empresa."
       );
       return;
     }
 
-    setEnviando(true);
+    if (!email.trim()) {
+      setError(
+        "Introduce el correo electrónico."
+      );
+      return;
+    }
+
+    if (!titulo.trim()) {
+      setError(
+        "Introduce el título de la incidencia."
+      );
+      return;
+    }
+
+    if (!descripcion.trim()) {
+      setError(
+        "Describe la incidencia."
+      );
+      return;
+    }
+
+    setGuardando(true);
 
     try {
-      const { error } = await supabase
+      const {
+        data: ticketData,
+        error: ticketError,
+      } = await supabase
         .from("it_tickets")
         .insert({
           creado_por: userId,
           nombre: nombre.trim(),
-          telefono: telefono.trim() || null,
+          telefono:
+            telefono.trim() || null,
           email: email.trim(),
-          empresa: empresa.trim(),
+          empresa,
           titulo: titulo.trim(),
-          descripcion: descripcion.trim(),
+          descripcion:
+            descripcion.trim(),
           importancia,
           estado: "PENDIENTE",
-          asignado_a: null,
-          resuelto_en: null,
-          resuelto_por: null,
-        });
+        })
+        .select("id")
+        .single();
 
-      if (error) {
-        console.error("Error creando ticket:", error);
-
-        setTipoMensaje("ERROR");
-        setMensaje(
-          `No se ha podido crear el ticket: ${error.message}`
-        );
-
-        setEnviando(false);
-        return;
+      if (ticketError) {
+        throw ticketError;
       }
 
-      setTipoMensaje("OK");
-      setMensaje("Incidencia enviada correctamente.");
+      /*
+       * Si hay imágenes iniciales,
+       * las guardamos como primer
+       * seguimiento del ticket.
+       */
+      if (
+        imagenes.length > 0 &&
+        ticketData
+      ) {
+        const {
+          data: seguimiento,
+          error: seguimientoError,
+        } = await supabase
+          .from("it_seguimientos")
+          .insert({
+            ticket_id:
+              ticketData.id,
+            creado_por: userId,
+            mensaje:
+              "Imagen adjunta",
+          })
+          .select("id")
+          .single();
 
-      setTimeout(() => {
-        router.push("/");
-        router.refresh();
-      }, 900);
-    } catch (error) {
-      console.error(error);
+        if (seguimientoError) {
+          throw seguimientoError;
+        }
 
-      setTipoMensaje("ERROR");
-      setMensaje(
-        "Ha ocurrido un error inesperado al crear el ticket."
+        for (
+          let i = 0;
+          i < imagenes.length;
+          i++
+        ) {
+          const archivo =
+            imagenes[i];
+
+          const extension =
+            archivo.name
+              .split(".")
+              .pop()
+              ?.toLowerCase() ??
+            "jpg";
+
+          const nombreSeguro =
+            archivo.name
+              .replace(
+                /\.[^/.]+$/,
+                ""
+              )
+              .replace(
+                /[^a-zA-Z0-9-_]/g,
+                "-"
+              )
+              .slice(0, 70);
+
+          const ruta =
+            `${ticketData.id}/` +
+            `${seguimiento.id}/` +
+            `${Date.now()}-${i}-${crypto.randomUUID()}-` +
+            `${nombreSeguro}.${extension}`;
+
+          const {
+            error: uploadError,
+          } = await supabase.storage
+            .from("it-tickets")
+            .upload(
+              ruta,
+              archivo,
+              {
+                cacheControl:
+                  "3600",
+                upsert: false,
+                contentType:
+                  archivo.type,
+              }
+            );
+
+          if (uploadError) {
+            throw uploadError;
+          }
+
+          const {
+            error:
+              archivoError,
+          } = await supabase
+            .from(
+              "it_seguimiento_archivos"
+            )
+            .insert({
+              seguimiento_id:
+                seguimiento.id,
+              ticket_id:
+                ticketData.id,
+              nombre_archivo:
+                archivo.name,
+              ruta_storage:
+                ruta,
+              tipo_mime:
+                archivo.type,
+              tamano:
+                archivo.size,
+              creado_por:
+                userId,
+            });
+
+          if (archivoError) {
+            throw archivoError;
+          }
+        }
+      }
+
+      router.push(
+        `/tickets/${ticketData.id}`
       );
 
-      setEnviando(false);
+      router.refresh();
+    } catch (err: any) {
+      console.error(err);
+
+      setError(
+        `No se ha podido crear el ticket: ${
+          err?.message ??
+          "Error desconocido"
+        }`
+      );
+
+      setGuardando(false);
     }
+  }
+
+  async function cerrarSesion() {
+    await supabase.auth.signOut();
+    router.replace("/login");
   }
 
   if (loading) {
     return (
       <main style={styles.loading}>
-        <div style={styles.loader} />
+        <div style={styles.loadingIcon}>
+          <SupportIcon />
+        </div>
 
-        <p
-          style={{
-            margin: 0,
-            color: "#7b8282",
-            fontSize: "13px",
-          }}
-        >
+        <span>
           Cargando...
-        </p>
+        </span>
       </main>
     );
   }
 
   return (
     <main style={styles.page}>
-      {/* =====================================================
-          CABECERA
-      ===================================================== */}
-
       <header style={styles.header}>
-        <div style={styles.headerInner}>
-          <button
-            onClick={() => router.push("/")}
-            style={styles.brandButton}
-          >
-            <div style={styles.logoIcon}>
-              <SupportIcon />
+        <div
+          style={styles.headerInner}
+        >
+          <div style={styles.brand}>
+            <div
+              style={styles.brandIcon}
+            >
+              <SupportIcon
+                color="#ffffff"
+              />
             </div>
 
-            <div style={styles.brandText}>
-              <div style={styles.brandTitle}>
+            <div>
+              <div
+                style={
+                  styles.brandTitle
+                }
+              >
                 IT Support
               </div>
 
-              <div style={styles.brandSubtitle}>
-                Gestión de incidencias informáticas
+              <div
+                style={
+                  styles.brandSubtitle
+                }
+              >
+                Gestión de incidencias
+                informáticas
               </div>
             </div>
-          </button>
+          </div>
 
-          <div style={styles.userEmail}>
-            {emailSesion}
+          <div
+            style={styles.userArea}
+          >
+            <div
+              style={styles.userInfo}
+            >
+              <span
+                style={
+                  styles.userEmail
+                }
+              >
+                {userEmail}
+              </span>
+
+              <span
+                style={styles.role}
+              >
+                {rol === "ADMIN"
+                  ? "ADMINISTRADOR"
+                  : "USUARIO"}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                cerrarSesion
+              }
+              style={
+                styles.logoutButton
+              }
+              title="Cerrar sesión"
+            >
+              <LogoutIcon />
+            </button>
           </div>
         </div>
       </header>
 
-      {/* =====================================================
-          CONTENIDO
-      ===================================================== */}
-
       <div style={styles.container}>
         <button
           type="button"
-          onClick={() => router.push("/")}
+          onClick={() =>
+            router.push("/")
+          }
           style={styles.backButton}
         >
           <ArrowLeftIcon />
           Volver a tickets
         </button>
 
-        <div style={styles.pageHeading}>
-          <h1 style={styles.pageTitle}>
-            Nueva incidencia
-          </h1>
+        <div
+          style={styles.titleArea}
+        >
+          <div>
+            <h1 style={styles.title}>
+              Nueva incidencia
+            </h1>
 
-          <p style={styles.pageDescription}>
-            Cuéntanos qué problema estás teniendo.
-            Informática recibirá tu solicitud y podrás
-            seguir su estado desde IT Support.
-          </p>
+            <p
+              style={
+                styles.subtitle
+              }
+            >
+              Describe el problema para
+              que el equipo de Informática
+              pueda ayudarte.
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={enviarTicket}>
-          {/* =================================================
-              DATOS DE CONTACTO
-          ================================================= */}
+        {error && (
+          <div
+            style={
+              styles.errorMessage
+            }
+          >
+            <AlertIcon />
+            {error}
+          </div>
+        )}
+
+        <form
+          onSubmit={crearTicket}
+          style={styles.form}
+        >
+          {/* CONTACTO */}
 
           <section style={styles.card}>
-            <div style={styles.cardHeading}>
-              <div style={styles.sectionIcon}>
+            <div
+              style={
+                styles.cardHeading
+              }
+            >
+              <div
+                style={
+                  styles.sectionIcon
+                }
+              >
                 <UserIcon />
               </div>
 
               <div>
-                <h2 style={styles.cardTitle}>
+                <h2
+                  style={
+                    styles.cardTitle
+                  }
+                >
                   Datos de contacto
                 </h2>
 
-                <p style={styles.cardSubtitle}>
-                  Indica cómo podemos localizarte si
-                  necesitamos más información.
+                <p
+                  style={
+                    styles.cardSubtitle
+                  }
+                >
+                  Información de la
+                  persona que solicita
+                  soporte.
                 </p>
               </div>
             </div>
 
-            <div style={styles.twoColumns}>
-              <Field
-                label="Nombre"
-                required
-              >
+            <div
+              style={
+                styles.twoColumns
+              }
+            >
+              <Field label="Nombre *">
                 <input
-                  type="text"
-                  required
                   value={nombre}
                   onChange={(e) =>
-                    setNombre(e.target.value)
+                    setNombre(
+                      e.target.value
+                    )
                   }
                   placeholder="Nombre y apellidos"
                   style={styles.input}
                 />
               </Field>
 
-              <Field
-                label="Empresa"
-                required
-              >
-                <input
-                  type="text"
-                  required
+              <Field label="Empresa *">
+                <select
                   value={empresa}
                   onChange={(e) =>
-                    setEmpresa(e.target.value)
+                    setEmpresa(
+                      e.target.value
+                    )
                   }
-                  placeholder="Empresa"
                   style={styles.input}
-                />
+                >
+                  <option value="">
+                    Seleccionar empresa...
+                  </option>
+
+                  {EMPRESAS.map(
+                    (empresaItem) => (
+                      <option
+                        key={
+                          empresaItem
+                        }
+                        value={
+                          empresaItem
+                        }
+                      >
+                        {empresaItem}
+                      </option>
+                    )
+                  )}
+                </select>
               </Field>
 
-              <Field
-                label="Correo electrónico"
-                required
-              >
+              <Field label="Correo electrónico *">
                 <input
                   type="email"
-                  required
                   value={email}
                   onChange={(e) =>
-                    setEmail(e.target.value)
+                    setEmail(
+                      e.target.value
+                    )
                   }
-                  placeholder="nombre@empresa.com"
+                  placeholder="correo@empresa.com"
                   style={styles.input}
                 />
               </Field>
 
               <Field label="Teléfono">
                 <input
-                  type="tel"
                   value={telefono}
                   onChange={(e) =>
-                    setTelefono(e.target.value)
+                    setTelefono(
+                      e.target.value
+                    )
                   }
-                  placeholder="Teléfono de contacto"
+                  placeholder="Teléfono"
                   style={styles.input}
                 />
               </Field>
             </div>
           </section>
 
-          {/* =================================================
-              INCIDENCIA
-          ================================================= */}
+          {/* INCIDENCIA */}
 
           <section style={styles.card}>
-            <div style={styles.cardHeading}>
-              <div style={styles.sectionIcon}>
-                <TicketFormIcon />
+            <div
+              style={
+                styles.cardHeading
+              }
+            >
+              <div
+                style={
+                  styles.sectionIcon
+                }
+              >
+                <IncidentIcon />
               </div>
 
               <div>
-                <h2 style={styles.cardTitle}>
+                <h2
+                  style={
+                    styles.cardTitle
+                  }
+                >
                   Incidencia
                 </h2>
 
-                <p style={styles.cardSubtitle}>
-                  Describe el problema con el mayor
-                  detalle posible.
+                <p
+                  style={
+                    styles.cardSubtitle
+                  }
+                >
+                  Cuéntanos qué problema
+                  estás teniendo.
                 </p>
               </div>
             </div>
 
-            <div style={styles.formStack}>
-              <Field
-                label="Título"
-                required
-              >
+            <div
+              style={
+                styles.formStack
+              }
+            >
+              <Field label="Título *">
                 <input
-                  type="text"
-                  required
                   value={titulo}
                   onChange={(e) =>
-                    setTitulo(e.target.value)
+                    setTitulo(
+                      e.target.value
+                    )
                   }
-                  placeholder="Ej. No puedo acceder al correo"
+                  placeholder="Resume brevemente el problema"
                   style={styles.input}
                 />
               </Field>
 
-              <Field
-                label="Descripción de la incidencia"
-                required
-              >
+              <Field label="Descripción *">
                 <textarea
-                  required
                   value={descripcion}
                   onChange={(e) =>
-                    setDescripcion(e.target.value)
+                    setDescripcion(
+                      e.target.value
+                    )
                   }
-                  placeholder="Explica qué ocurre, desde cuándo sucede y cualquier información que pueda ayudarnos a resolverlo..."
-                  style={styles.textarea}
+                  placeholder="Describe qué ocurre, cuándo comenzó y cualquier detalle que pueda ayudarnos..."
+                  style={
+                    styles.textarea
+                  }
                 />
               </Field>
 
-              {/* =============================================
-                  IMPORTANCIA
-              ============================================= */}
+              <Field label="Importancia">
+                <select
+                  value={importancia}
+                  onChange={(e) =>
+                    setImportancia(
+                      e.target
+                        .value as Importancia
+                    )
+                  }
+                  style={styles.input}
+                >
+                  <option value="BAJA">
+                    Baja
+                  </option>
 
-              <Field
-                label="Importancia"
-                required
-              >
-                <div style={styles.priorityGrid}>
-                  <PriorityButton
-                    label="Baja"
-                    description="No impide trabajar"
-                    value="BAJA"
-                    selected={
-                      importancia === "BAJA"
-                    }
-                    onClick={() =>
-                      setImportancia("BAJA")
-                    }
-                  />
+                  <option value="MEDIA">
+                    Media
+                  </option>
 
-                  <PriorityButton
-                    label="Media"
-                    description="Afecta al trabajo"
-                    value="MEDIA"
-                    selected={
-                      importancia === "MEDIA"
-                    }
-                    onClick={() =>
-                      setImportancia("MEDIA")
-                    }
-                  />
+                  <option value="ALTA">
+                    Alta
+                  </option>
 
-                  <PriorityButton
-                    label="Alta"
-                    description="Impide una tarea importante"
-                    value="ALTA"
-                    selected={
-                      importancia === "ALTA"
-                    }
-                    onClick={() =>
-                      setImportancia("ALTA")
-                    }
-                  />
-
-                  <PriorityButton
-                    label="Urgente"
-                    description="Bloqueo crítico"
-                    value="URGENTE"
-                    selected={
-                      importancia === "URGENTE"
-                    }
-                    onClick={() =>
-                      setImportancia("URGENTE")
-                    }
-                  />
-                </div>
-              </Field>
-
-              {/* =============================================
-                  ARCHIVOS
-              ============================================= */}
-
-              <Field label="Fotografías o capturas">
-                <label style={styles.uploadArea}>
-                  <div style={styles.uploadIcon}>
-                    <UploadIcon />
-                  </div>
-
-                  <strong style={styles.uploadTitle}>
-                    Añadir imágenes
-                  </strong>
-
-                  <span style={styles.uploadText}>
-                    Puedes adjuntar hasta 5 fotografías
-                    o capturas que ayuden a entender la
-                    incidencia.
-                  </span>
-
-                  <span style={styles.uploadButton}>
-                    Seleccionar archivos
-                  </span>
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={seleccionarArchivos}
-                    style={{
-                      display: "none",
-                    }}
-                  />
-                </label>
-
-                {archivos.length > 0 && (
-                  <div style={styles.fileList}>
-                    {archivos.map(
-                      (archivo, index) => (
-                        <div
-                          key={`${archivo.name}-${index}`}
-                          style={styles.fileItem}
-                        >
-                          <div
-                            style={styles.fileInfo}
-                          >
-                            <div
-                              style={styles.fileIcon}
-                            >
-                              <ImageIcon />
-                            </div>
-
-                            <div
-                              style={styles.fileText}
-                            >
-                              <strong
-                                style={
-                                  styles.fileName
-                                }
-                              >
-                                {archivo.name}
-                              </strong>
-
-                              <span
-                                style={
-                                  styles.fileSize
-                                }
-                              >
-                                {formatearTamano(
-                                  archivo.size
-                                )}
-                              </span>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              eliminarArchivo(
-                                index
-                              )
-                            }
-                            style={
-                              styles.removeFile
-                            }
-                            aria-label="Eliminar archivo"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-
-                <div style={styles.fileCounter}>
-                  {archivos.length}/5 archivos
-                </div>
+                  <option value="URGENTE">
+                    Urgente
+                  </option>
+                </select>
               </Field>
             </div>
           </section>
 
-          {/* =================================================
-              MENSAJE
-          ================================================= */}
+          {/* IMÁGENES */}
 
-          {mensaje && (
+          <section style={styles.card}>
             <div
-              style={{
-                ...styles.message,
-                ...(tipoMensaje === "OK"
-                  ? styles.successMessage
-                  : styles.errorMessage),
-              }}
+              style={
+                styles.cardHeading
+              }
             >
-              {tipoMensaje === "OK" ? (
-                <CheckIcon />
-              ) : (
-                <AlertIcon />
-              )}
+              <div
+                style={
+                  styles.sectionIcon
+                }
+              >
+                <ImageIcon />
+              </div>
 
-              <span>{mensaje}</span>
+              <div>
+                <h2
+                  style={
+                    styles.cardTitle
+                  }
+                >
+                  Imágenes
+                </h2>
+
+                <p
+                  style={
+                    styles.cardSubtitle
+                  }
+                >
+                  Puedes adjuntar
+                  capturas o fotografías
+                  que ayuden a entender
+                  el problema.
+                </p>
+              </div>
             </div>
-          )}
 
-          {/* =================================================
-              BOTONES
-          ================================================= */}
+            <label
+              style={
+                styles.attachButton
+              }
+            >
+              <ImageIcon />
 
-          <div style={styles.actions}>
+              Adjuntar imágenes
+
+              <input
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp"
+                onChange={
+                  seleccionarImagenes
+                }
+                style={{
+                  display: "none",
+                }}
+              />
+            </label>
+
+            <span
+              style={
+                styles.fileHint
+              }
+            >
+              JPG, PNG o WEBP · Máx.
+              10 MB por imagen
+            </span>
+
+            {imagenes.length > 0 && (
+              <div
+                style={
+                  styles.fileList
+                }
+              >
+                {imagenes.map(
+                  (archivo, index) => (
+                    <div
+                      key={`${archivo.name}-${index}`}
+                      style={
+                        styles.fileItem
+                      }
+                    >
+                      <div
+                        style={
+                          styles.fileInfo
+                        }
+                      >
+                        <ImageIcon />
+
+                        <span>
+                          {archivo.name}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          quitarImagen(
+                            index
+                          )
+                        }
+                        style={
+                          styles.removeFile
+                        }
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          </section>
+
+          <div
+            style={
+              styles.actions
+            }
+          >
             <button
               type="button"
-              onClick={() => router.push("/")}
-              style={styles.cancelButton}
-              disabled={enviando}
+              onClick={() =>
+                router.push("/")
+              }
+              style={
+                styles.cancelButton
+              }
             >
               Cancelar
             </button>
 
             <button
               type="submit"
+              disabled={guardando}
               style={{
                 ...styles.submitButton,
-                opacity: enviando ? 0.65 : 1,
-                cursor: enviando
-                  ? "not-allowed"
-                  : "pointer",
+                opacity:
+                  guardando
+                    ? 0.6
+                    : 1,
               }}
-              disabled={enviando}
             >
-              {enviando ? (
-                <>
-                  <SmallLoader />
-                  Enviando...
-                </>
-              ) : (
-                <>
-                  <SendIcon />
-                  Enviar ticket
-                </>
-              )}
+              <TicketPlusIcon />
+
+              {guardando
+                ? "Creando..."
+                : "Crear ticket"}
             </button>
           </div>
         </form>
@@ -616,30 +884,19 @@ export default function NuevoTicketPage() {
   );
 }
 
-/* =========================================================
-   COMPONENTES
-========================================================= */
-
 function Field({
   label,
-  required,
   children,
 }: {
   label: string;
-  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label style={styles.label}>
+      <label
+        style={styles.fieldLabel}
+      >
         {label}
-
-        {required && (
-          <span style={styles.required}>
-            {" "}
-            *
-          </span>
-        )}
       </label>
 
       {children}
@@ -647,100 +904,18 @@ function Field({
   );
 }
 
-function PriorityButton({
-  label,
-  description,
-  value,
-  selected,
-  onClick,
+function SupportIcon({
+  color = "#00AF9A",
 }: {
-  label: string;
-  description: string;
-  value: Importancia;
-  selected: boolean;
-  onClick: () => void;
+  color?: string;
 }) {
-  const colors: Record<
-    Importancia,
-    {
-      normal: string;
-      selected: string;
-      dot: string;
-    }
-  > = {
-    BAJA: {
-      normal: "#ffffff",
-      selected: "#eef8f5",
-      dot: "#4cab91",
-    },
-
-    MEDIA: {
-      normal: "#ffffff",
-      selected: "#fff6df",
-      dot: "#e7ad2f",
-    },
-
-    ALTA: {
-      normal: "#ffffff",
-      selected: "#fff0e8",
-      dot: "#e77a3d",
-    },
-
-    URGENTE: {
-      normal: "#ffffff",
-      selected: "#fff0f0",
-      dot: "#d94b4b",
-    },
-  };
-
-  const color = colors[value];
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        ...styles.priorityButton,
-        background: selected
-          ? color.selected
-          : color.normal,
-        border: selected
-          ? `1px solid ${color.dot}`
-          : "1px solid #dfe4e4",
-      }}
-    >
-      <span
-        style={{
-          ...styles.priorityDot,
-          background: color.dot,
-        }}
-      />
-
-      <span style={styles.priorityText}>
-        <strong style={styles.priorityTitle}>
-          {label}
-        </strong>
-
-        <span style={styles.priorityDescription}>
-          {description}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-/* =========================================================
-   ICONOS
-========================================================= */
-
-function SupportIcon() {
   return (
     <svg
-      width="24"
-      height="24"
+      width="23"
+      height="23"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="white"
+      stroke={color}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -749,6 +924,91 @@ function SupportIcon() {
       <path d="M18 19c0 1.1-.9 2-2 2h-3" />
       <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
       <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle
+        cx="12"
+        cy="8"
+        r="4"
+      />
+
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  );
+}
+
+function IncidentIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8" />
+      <path d="M8 17h5" />
+    </svg>
+  );
+}
+
+function ImageIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect
+        x="3"
+        y="3"
+        width="18"
+        height="18"
+        rx="2"
+      />
+
+      <circle
+        cx="8.5"
+        cy="8.5"
+        r="1.5"
+      />
+
+      <path d="m21 15-5-5L5 21" />
+    </svg>
+  );
+}
+
+function TicketPlusIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M12 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5" />
+      <path d="M18 2v6" />
+      <path d="M15 5h6" />
     </svg>
   );
 }
@@ -762,97 +1022,13 @@ function ArrowLeftIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
       <path d="m15 18-6-6 6-6" />
     </svg>
   );
 }
 
-function UserIcon() {
-  return (
-    <svg
-      width="21"
-      height="21"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21a8 8 0 0 1 16 0" />
-    </svg>
-  );
-}
-
-function TicketFormIcon() {
-  return (
-    <svg
-      width="21"
-      height="21"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
-      <path d="M14 2v6h6" />
-      <path d="M8 13h8" />
-      <path d="M8 17h5" />
-    </svg>
-  );
-}
-
-function UploadIcon() {
-  return (
-    <svg
-      width="25"
-      height="25"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 16V4" />
-      <path d="m7 9 5-5 5 5" />
-      <path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4" />
-    </svg>
-  );
-}
-
-function ImageIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect
-        x="3"
-        y="3"
-        width="18"
-        height="18"
-        rx="2"
-      />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <path d="m21 15-5-5L5 21" />
-    </svg>
-  );
-}
-
-function SendIcon() {
+function AlertIcon() {
   return (
     <svg
       width="17"
@@ -861,143 +1037,95 @@ function SendIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
-      <path d="m22 2-7 20-4-9-9-4Z" />
-      <path d="M22 2 11 13" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="m8 12 2.5 2.5L16 9" />
-    </svg>
-  );
-}
-
-function AlertIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="9" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
       <path d="M12 8v5" />
       <path d="M12 16h.01" />
     </svg>
   );
 }
 
-function SmallLoader() {
+function LogoutIcon() {
   return (
-    <span
-      style={{
-        width: "14px",
-        height: "14px",
-        border: "2px solid rgba(255,255,255,0.45)",
-        borderTopColor: "#ffffff",
-        borderRadius: "50%",
-        display: "inline-block",
-      }}
-    />
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M10 17l5-5-5-5" />
+      <path d="M15 12H3" />
+      <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+    </svg>
   );
 }
 
-/* =========================================================
-   UTILIDADES
-========================================================= */
-
-function formatearTamano(bytes: number) {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/* =========================================================
-   ESTILOS
-========================================================= */
-
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: "100vh",
     background: "#f5f7f7",
     color: "#202424",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
   },
 
   loading: {
     minHeight: "100vh",
     background: "#f5f7f7",
     display: "flex",
-    flexDirection: "column",
-    gap: "14px",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    flexDirection: "column",
+    gap: "12px",
+    color: "#7e8787",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
   },
 
-  loader: {
-    width: "28px",
-    height: "28px",
-    border: "3px solid #dfe8e7",
-    borderTopColor: "#00AF9A",
-    borderRadius: "50%",
+  loadingIcon: {
+    width: "45px",
+    height: "45px",
+    background: "#eaf8f6",
+    borderRadius: "11px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   header: {
     background: "#ffffff",
-    borderBottom: "1px solid #e8ecec",
+    borderBottom:
+      "1px solid #e8ecec",
   },
 
   headerInner: {
-    maxWidth: "1240px",
+    maxWidth: "1180px",
     minHeight: "78px",
     margin: "0 auto",
-    padding: "0 30px",
+    padding: "0 25px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: "30px",
+    justifyContent:
+      "space-between",
   },
 
-  brandButton: {
-    padding: 0,
-    border: "none",
-    background: "transparent",
+  brand: {
     display: "flex",
     alignItems: "center",
-    gap: "14px",
-    cursor: "pointer",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    textAlign: "left",
+    gap: "13px",
   },
 
-  logoIcon: {
+  brandIcon: {
     width: "44px",
     height: "44px",
     borderRadius: "11px",
@@ -1005,93 +1133,121 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
-  },
-
-  brandText: {
-    display: "block",
   },
 
   brandTitle: {
-    color: "#202424",
     fontSize: "17px",
     fontWeight: 700,
-    lineHeight: 1.2,
   },
 
   brandSubtitle: {
-    marginTop: "4px",
-    color: "#8a9191",
-    fontSize: "11px",
+    color: "#899191",
+    fontSize: "10px",
+    marginTop: "3px",
+  },
+
+  userArea: {
+    display: "flex",
+    alignItems: "center",
+    gap: "15px",
+  },
+
+  userInfo: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: "3px",
   },
 
   userEmail: {
+    fontSize: "11px",
+  },
+
+  role: {
+    color: "#00AF9A",
+    fontSize: "9px",
+    fontWeight: 700,
+  },
+
+  logoutButton: {
+    width: "38px",
+    height: "38px",
+    border:
+      "1px solid #dfe4e4",
+    borderRadius: "9px",
+    background: "#ffffff",
     color: "#555d5d",
-    fontSize: "12px",
-    fontWeight: 500,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
   },
 
   container: {
     width: "calc(100% - 48px)",
-    maxWidth: "960px",
+    maxWidth: "900px",
     margin: "0 auto",
-    padding: "34px 0 70px",
+    padding: "32px 0 70px",
   },
 
   backButton: {
-    padding: 0,
     border: "none",
     background: "transparent",
+    padding: 0,
+    marginBottom: "23px",
     color: "#677070",
     display: "flex",
     alignItems: "center",
     gap: "6px",
-    marginBottom: "24px",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
     fontSize: "11px",
-    fontWeight: 500,
     cursor: "pointer",
   },
 
-  pageHeading: {
-    marginBottom: "28px",
+  titleArea: {
+    marginBottom: "25px",
   },
 
-  pageTitle: {
-    margin: "0 0 7px",
-    color: "#202424",
-    fontSize: "28px",
+  title: {
+    margin: "0 0 6px",
+    fontSize: "26px",
     fontWeight: 700,
   },
 
-  pageDescription: {
-    maxWidth: "680px",
+  subtitle: {
     margin: 0,
-    color: "#7b8282",
-    fontSize: "13px",
-    lineHeight: 1.6,
+    color: "#858d8d",
+    fontSize: "11px",
+  },
+
+  form: {
+    display: "flex",
+    flexDirection: "column",
   },
 
   card: {
     background: "#ffffff",
-    border: "1px solid #e5e9e9",
+    border:
+      "1px solid #e5e9e9",
     borderRadius: "14px",
-    padding: "26px",
+    padding: "24px",
     marginBottom: "20px",
   },
 
   cardHeading: {
     display: "flex",
     alignItems: "center",
-    gap: "13px",
-    paddingBottom: "20px",
-    marginBottom: "22px",
-    borderBottom: "1px solid #edf0f0",
+    gap: "12px",
+    paddingBottom: "18px",
+    marginBottom: "20px",
+    borderBottom:
+      "1px solid #edf0f0",
   },
 
   sectionIcon: {
-    width: "42px",
-    height: "42px",
+    width: "40px",
+    height: "40px",
     borderRadius: "10px",
     background: "#ecf9f7",
     color: "#00A992",
@@ -1103,183 +1259,111 @@ const styles: Record<string, React.CSSProperties> = {
 
   cardTitle: {
     margin: "0 0 3px",
-    color: "#202424",
-    fontSize: "15px",
+    fontSize: "14px",
     fontWeight: 700,
   },
 
   cardSubtitle: {
     margin: 0,
     color: "#8a9191",
-    fontSize: "11px",
+    fontSize: "10px",
   },
 
   twoColumns: {
     display: "grid",
     gridTemplateColumns:
-      "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: "20px",
+      "repeat(2, minmax(0, 1fr))",
+    gap: "18px",
   },
 
   formStack: {
     display: "flex",
     flexDirection: "column",
-    gap: "22px",
+    gap: "18px",
   },
 
-  label: {
+  fieldLabel: {
     display: "block",
-    marginBottom: "8px",
-    color: "#343838",
-    fontSize: "12px",
+    marginBottom: "7px",
+    color: "#444a4a",
+    fontSize: "10px",
     fontWeight: 600,
-  },
-
-  required: {
-    color: "#00AF9A",
   },
 
   input: {
     width: "100%",
-    height: "44px",
+    height: "42px",
     boxSizing: "border-box",
-    border: "1px solid #d9dede",
+    border:
+      "1px solid #d9dede",
     borderRadius: "8px",
-    padding: "0 13px",
+    padding: "0 12px",
     background: "#ffffff",
     color: "#303535",
     outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "12px",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
   },
 
   textarea: {
     width: "100%",
-    minHeight: "150px",
-    resize: "vertical",
+    minHeight: "145px",
     boxSizing: "border-box",
-    border: "1px solid #d9dede",
+    resize: "vertical",
+    border:
+      "1px solid #d9dede",
     borderRadius: "8px",
-    padding: "13px",
+    padding: "12px",
     background: "#ffffff",
     color: "#303535",
     outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "12px",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
     lineHeight: 1.6,
   },
 
-  priorityGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(170px, 1fr))",
-    gap: "10px",
-  },
-
-  priorityButton: {
-    minHeight: "70px",
-    borderRadius: "9px",
-    padding: "12px 13px",
-    display: "flex",
-    alignItems: "center",
-    gap: "11px",
-    textAlign: "left",
-    cursor: "pointer",
-    fontFamily: "'Poppins', Arial, sans-serif",
-  },
-
-  priorityDot: {
-    width: "9px",
-    height: "9px",
-    borderRadius: "50%",
-    flexShrink: 0,
-  },
-
-  priorityText: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "2px",
-  },
-
-  priorityTitle: {
-    color: "#303535",
-    fontSize: "12px",
-    fontWeight: 600,
-  },
-
-  priorityDescription: {
-    color: "#8a9191",
-    fontSize: "9px",
-    lineHeight: 1.4,
-  },
-
-  uploadArea: {
-    minHeight: "175px",
-    border: "1px dashed #cbd3d3",
-    borderRadius: "10px",
-    background: "#fafcfc",
-    padding: "25px",
-    boxSizing: "border-box",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center",
-    cursor: "pointer",
-  },
-
-  uploadIcon: {
-    width: "44px",
-    height: "44px",
-    borderRadius: "11px",
-    background: "#ecf9f7",
-    color: "#00A992",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: "10px",
-  },
-
-  uploadTitle: {
-    color: "#303535",
-    fontSize: "12px",
-    fontWeight: 600,
-    marginBottom: "4px",
-  },
-
-  uploadText: {
-    maxWidth: "470px",
-    color: "#8a9191",
-    fontSize: "10px",
-    lineHeight: 1.5,
-    marginBottom: "13px",
-  },
-
-  uploadButton: {
-    border: "1px solid #00AF9A",
-    borderRadius: "7px",
+  attachButton: {
+    height: "38px",
+    padding: "0 12px",
+    border:
+      "1px solid #d7dddd",
+    borderRadius: "8px",
     background: "#ffffff",
-    color: "#009682",
-    padding: "8px 13px",
+    color: "#525b5b",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
     fontSize: "10px",
     fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  fileHint: {
+    marginLeft: "10px",
+    color: "#969d9d",
+    fontSize: "8px",
   },
 
   fileList: {
-    marginTop: "12px",
     display: "flex",
     flexDirection: "column",
-    gap: "8px",
+    gap: "7px",
+    marginTop: "15px",
   },
 
   fileItem: {
-    minHeight: "54px",
-    border: "1px solid #e4e8e8",
+    minHeight: "38px",
+    padding: "0 11px",
+    border:
+      "1px solid #e4e8e8",
     borderRadius: "8px",
-    padding: "8px 10px",
+    background: "#f8fafa",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     gap: "15px",
   },
 
@@ -1287,121 +1371,68 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
     display: "flex",
     alignItems: "center",
-    gap: "10px",
-  },
-
-  fileIcon: {
-    width: "34px",
-    height: "34px",
-    borderRadius: "7px",
-    background: "#ecf9f7",
-    color: "#00A992",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-
-  fileText: {
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: "2px",
-  },
-
-  fileName: {
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    color: "#343838",
-    fontSize: "10px",
-    fontWeight: 500,
-  },
-
-  fileSize: {
-    color: "#969c9c",
+    gap: "8px",
+    color: "#596161",
     fontSize: "9px",
   },
 
   removeFile: {
-    width: "30px",
-    height: "30px",
     border: "none",
-    borderRadius: "7px",
-    background: "#f5f7f7",
-    color: "#737a7a",
+    background: "transparent",
+    color: "#8b9292",
     fontSize: "18px",
-    lineHeight: 1,
     cursor: "pointer",
-    flexShrink: 0,
-  },
-
-  fileCounter: {
-    marginTop: "7px",
-    color: "#9ba1a1",
-    fontSize: "9px",
-    textAlign: "right",
-  },
-
-  message: {
-    minHeight: "48px",
-    boxSizing: "border-box",
-    borderRadius: "9px",
-    padding: "12px 15px",
-    marginTop: "4px",
-    display: "flex",
-    alignItems: "center",
-    gap: "9px",
-    fontSize: "11px",
-    fontWeight: 500,
-  },
-
-  successMessage: {
-    background: "#eaf8f4",
-    border: "1px solid #c9ebe2",
-    color: "#087965",
-  },
-
-  errorMessage: {
-    background: "#fff1f1",
-    border: "1px solid #f0cece",
-    color: "#a63d3d",
   },
 
   actions: {
     display: "flex",
-    alignItems: "center",
     justifyContent: "flex-end",
     gap: "10px",
-    marginTop: "24px",
   },
 
   cancelButton: {
     height: "42px",
     padding: "0 18px",
-    border: "1px solid #d8dddd",
+    border:
+      "1px solid #d9dede",
     borderRadius: "8px",
     background: "#ffffff",
-    color: "#555d5d",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
-    fontWeight: 500,
+    color: "#596161",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "10px",
+    fontWeight: 600,
     cursor: "pointer",
   },
 
   submitButton: {
     height: "42px",
-    padding: "0 19px",
+    padding: "0 18px",
     border: "none",
     borderRadius: "8px",
     background: "#00AF9A",
     color: "#ffffff",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "10px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  errorMessage: {
+    padding: "12px 14px",
+    marginBottom: "18px",
+    border:
+      "1px solid #efcaca",
+    borderRadius: "9px",
+    background: "#fff1f1",
+    color: "#aa4141",
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
     gap: "8px",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
-    fontWeight: 600,
+    fontSize: "10px",
   },
 };
