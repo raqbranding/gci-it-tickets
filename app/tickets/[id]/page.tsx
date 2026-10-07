@@ -78,18 +78,10 @@ export default function TicketPage() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
 
-  /* =========================================================
-     CONTACTO
-  ========================================================= */
-
   const [nombre, setNombre] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
-
-  /* =========================================================
-     ADMIN
-  ========================================================= */
 
   const [estadoEditado, setEstadoEditado] =
     useState<Estado>("PENDIENTE");
@@ -97,28 +89,19 @@ export default function TicketPage() {
   const [importanciaEditada, setImportanciaEditada] =
     useState<Importancia>("BAJA");
 
-  /* =========================================================
-     SEGUIMIENTO
-  ========================================================= */
-
   const [seguimientos, setSeguimientos] =
     useState<Seguimiento[]>([]);
 
   const [archivos, setArchivos] =
     useState<ArchivoSeguimiento[]>([]);
 
-  const [nuevoSeguimiento, setNuevoSeguimiento] =
-    useState("");
+  const [nuevoSeguimiento, setNuevoSeguimiento] = useState("");
 
   const [imagenesPendientes, setImagenesPendientes] =
     useState<ImagenPendiente[]>([]);
 
   const [imagenAmpliada, setImagenAmpliada] =
     useState<string | null>(null);
-
-  /* =========================================================
-     TAGS
-  ========================================================= */
 
   const [tags, setTags] = useState<Tag[]>([]);
 
@@ -127,23 +110,11 @@ export default function TicketPage() {
 
   const [tagsTicket, setTagsTicket] = useState<Tag[]>([]);
 
-  const [nuevoTagNombre, setNuevoTagNombre] =
-    useState("");
-
-  const [nuevoTagColor, setNuevoTagColor] =
-    useState("#00AF9A");
-
-  /* =========================================================
-     MENSAJES
-  ========================================================= */
+  const [nuevoTagNombre, setNuevoTagNombre] = useState("");
+  const [nuevoTagColor, setNuevoTagColor] = useState("#00AF9A");
 
   const [error, setError] = useState("");
-  const [mensajeGuardado, setMensajeGuardado] =
-    useState("");
-
-  /* =========================================================
-     CARGA
-  ========================================================= */
+  const [mensajeGuardado, setMensajeGuardado] = useState("");
 
   useEffect(() => {
     if (ticketId) {
@@ -234,10 +205,6 @@ export default function TicketPage() {
     setLoading(false);
   }
 
-  /* =========================================================
-     SEGUIMIENTOS
-  ========================================================= */
-
   async function cargarSeguimientos() {
     const { data, error: seguimientoError } =
       await supabase
@@ -289,8 +256,7 @@ export default function TicketPage() {
       return;
     }
 
-    const lista =
-      (data ?? []) as ArchivoSeguimiento[];
+    const lista = (data ?? []) as ArchivoSeguimiento[];
 
     const listaConUrls = await Promise.all(
       lista.map(async (archivo) => {
@@ -311,10 +277,6 @@ export default function TicketPage() {
 
     setArchivos(listaConUrls);
   }
-
-  /* =========================================================
-     TAGS
-  ========================================================= */
 
   async function cargarTags(rolUsuario: Rol) {
     const {
@@ -369,10 +331,6 @@ export default function TicketPage() {
     }
   }
 
-  /* =========================================================
-     DETECTAR CAMBIOS
-  ========================================================= */
-
   const hayCambiosContacto = useMemo(() => {
     if (!ticket) return false;
 
@@ -382,13 +340,7 @@ export default function TicketPage() {
       email.trim() !== (ticket.email ?? "") ||
       telefono.trim() !== (ticket.telefono ?? "")
     );
-  }, [
-    ticket,
-    nombre,
-    empresa,
-    email,
-    telefono,
-  ]);
+  }, [ticket, nombre, empresa, email, telefono]);
 
   const hayCambiosAdmin = useMemo(() => {
     if (!ticket || rol !== "ADMIN") return false;
@@ -426,19 +378,10 @@ export default function TicketPage() {
     (rol === "ADMIN" && hayCambiosAdmin) ||
     haySeguimientoPendiente;
 
-  /* =========================================================
-     GUARDAR CONTACTO
-     ADMIN Y USUARIO
-  ========================================================= */
-
   async function guardarDatosContacto() {
     if (!ticket) return;
 
-    if (
-      !nombre.trim() ||
-      !empresa ||
-      !email.trim()
-    ) {
+    if (!nombre.trim() || !empresa || !email.trim()) {
       throw new Error(
         "Nombre, empresa y correo electrónico son obligatorios."
       );
@@ -475,10 +418,6 @@ export default function TicketPage() {
         : actual
     );
   }
-
-  /* =========================================================
-     GUARDAR ADMIN
-  ========================================================= */
 
   async function guardarDatosAdmin() {
     if (!ticket || rol !== "ADMIN") return;
@@ -588,10 +527,6 @@ export default function TicketPage() {
     setTagsTicketOriginales([...tagsTicket]);
   }
 
-  /* =========================================================
-     TAGS EN PANTALLA
-  ========================================================= */
-
   function seleccionarTag(tagId: string) {
     if (rol !== "ADMIN" || !tagId) return;
 
@@ -680,11 +615,6 @@ export default function TicketPage() {
       )
     );
 
-    /*
-      No creamos todavía la relación con el ticket.
-      Solo lo añadimos al estado local.
-      Guardar cambios hará la relación.
-    */
     setTagsTicket((actuales) => {
       if (
         actuales.some(
@@ -700,10 +630,6 @@ export default function TicketPage() {
     setNuevoTagNombre("");
     setNuevoTagColor("#00AF9A");
   }
-
-  /* =========================================================
-     IMÁGENES PENDIENTES
-  ========================================================= */
 
   function seleccionarImagenes(
     event: ChangeEvent<HTMLInputElement>
@@ -785,10 +711,6 @@ export default function TicketPage() {
 
     setMensajeGuardado("");
   }
-
-  /* =========================================================
-     GUARDAR SEGUIMIENTO
-  ========================================================= */
 
   async function guardarSeguimiento() {
     if (!ticket) return;
@@ -956,10 +878,6 @@ export default function TicketPage() {
     setNuevoSeguimiento("");
   }
 
-  /* =========================================================
-     ÚNICO GUARDAR
-  ========================================================= */
-
   async function guardarTodo() {
     if (
       !ticket ||
@@ -975,18 +893,10 @@ export default function TicketPage() {
     setMensajeGuardado("");
 
     try {
-      /*
-        CONTACTO
-        ADMIN y USUARIO
-      */
       if (hayCambiosContacto) {
         await guardarDatosContacto();
       }
 
-      /*
-        ADMIN
-        Estado, importancia y tags
-      */
       if (
         rol === "ADMIN" &&
         hayCambiosAdmin
@@ -994,10 +904,6 @@ export default function TicketPage() {
         await guardarDatosAdmin();
       }
 
-      /*
-        SEGUIMIENTO
-        Texto y/o imágenes
-      */
       if (haySeguimientoPendiente) {
         await guardarSeguimiento();
       }
@@ -1019,10 +925,6 @@ export default function TicketPage() {
     }
   }
 
-  /* =========================================================
-     LOADING
-  ========================================================= */
-
   if (loading) {
     return (
       <main style={styles.loading}>
@@ -1038,10 +940,6 @@ export default function TicketPage() {
       </main>
     );
   }
-
-  /* =========================================================
-     NO ENCONTRADO
-  ========================================================= */
 
   if (!ticket) {
     return (
@@ -1098,10 +996,6 @@ export default function TicketPage() {
     );
   }
 
-  /* =========================================================
-     PÁGINA
-  ========================================================= */
-
   return (
     <main style={styles.page}>
       <Header
@@ -1123,8 +1017,6 @@ export default function TicketPage() {
           <ArrowLeftIcon />
           Volver a tickets
         </button>
-
-        {/* CABECERA */}
 
         <section
           style={styles.ticketHeader}
@@ -1221,15 +1113,12 @@ export default function TicketPage() {
                   <option value="BAJA">
                     ● Baja
                   </option>
-
                   <option value="MEDIA">
                     ● Media
                   </option>
-
                   <option value="ALTA">
                     ● Alta
                   </option>
-
                   <option value="URGENTE">
                     ● Urgente
                   </option>
@@ -1279,11 +1168,9 @@ export default function TicketPage() {
                   <option value="PENDIENTE">
                     ● Pendiente
                   </option>
-
                   <option value="EN_CURSO">
                     ● En curso
                   </option>
-
                   <option value="RESUELTO">
                     ● Resuelto
                   </option>
@@ -1307,13 +1194,9 @@ export default function TicketPage() {
         )}
 
         <div style={styles.layout}>
-          {/* COLUMNA PRINCIPAL */}
-
           <div
             style={styles.mainColumn}
           >
-            {/* INCIDENCIA */}
-
             <section
               style={styles.card}
             >
@@ -1395,8 +1278,6 @@ export default function TicketPage() {
                 </div>
               </div>
             </section>
-
-            {/* SEGUIMIENTO */}
 
             <section
               style={styles.card}
@@ -1594,8 +1475,6 @@ export default function TicketPage() {
                 </div>
               )}
 
-              {/* NUEVO SEGUIMIENTO */}
-
               <div
                 style={
                   styles.followUpComposer
@@ -1688,7 +1567,6 @@ export default function TicketPage() {
                       }
                     >
                       <ImageIcon />
-
                       Adjuntar imágenes
 
                       <input
@@ -1764,14 +1642,9 @@ export default function TicketPage() {
               </div>
             </section>
           </div>
-
-          {/* COLUMNA DERECHA */}
-
-          <aside
+                    <aside
             style={styles.sideColumn}
           >
-            {/* CONTACTO */}
-
             <section style={styles.card}>
               <div
                 style={
@@ -1816,10 +1689,7 @@ export default function TicketPage() {
                       setNombre(
                         e.target.value
                       );
-
-                      setMensajeGuardado(
-                        ""
-                      );
+                      setMensajeGuardado("");
                     }}
                     style={styles.input}
                   />
@@ -1832,10 +1702,7 @@ export default function TicketPage() {
                       setEmpresa(
                         e.target.value
                       );
-
-                      setMensajeGuardado(
-                        ""
-                      );
+                      setMensajeGuardado("");
                     }}
                     style={styles.input}
                   >
@@ -1855,20 +1722,12 @@ export default function TicketPage() {
                       )}
 
                     {EMPRESAS.map(
-                      (
-                        empresaItem
-                      ) => (
+                      (empresaItem) => (
                         <option
-                          key={
-                            empresaItem
-                          }
-                          value={
-                            empresaItem
-                          }
+                          key={empresaItem}
+                          value={empresaItem}
                         >
-                          {
-                            empresaItem
-                          }
+                          {empresaItem}
                         </option>
                       )
                     )}
@@ -1883,10 +1742,7 @@ export default function TicketPage() {
                       setEmail(
                         e.target.value
                       );
-
-                      setMensajeGuardado(
-                        ""
-                      );
+                      setMensajeGuardado("");
                     }}
                     style={styles.input}
                   />
@@ -1899,19 +1755,14 @@ export default function TicketPage() {
                       setTelefono(
                         e.target.value
                       );
-
-                      setMensajeGuardado(
-                        ""
-                      );
+                      setMensajeGuardado("");
                     }}
                     style={styles.input}
                   />
                 </Field>
 
                 <p
-                  style={
-                    styles.editHint
-                  }
+                  style={styles.editHint}
                 >
                   Estos datos pueden
                   corregirse si se detecta
@@ -1921,8 +1772,6 @@ export default function TicketPage() {
                 </p>
               </div>
             </section>
-
-            {/* TAGS */}
 
             <section
               style={styles.card}
@@ -1978,8 +1827,7 @@ export default function TicketPage() {
                           ...styles.tag,
                           borderColor:
                             tag.color,
-                          color:
-                            tag.color,
+                          color: tag.color,
                         }}
                       >
                         <span
@@ -2047,9 +1895,7 @@ export default function TicketPage() {
                       .filter(
                         (tag) =>
                           !tagsTicket.some(
-                            (
-                              asignado
-                            ) =>
+                            (asignado) =>
                               asignado.id ===
                               tag.id
                           )
@@ -2102,8 +1948,7 @@ export default function TicketPage() {
                         }
                         onChange={(e) =>
                           setNuevoTagColor(
-                            e.target
-                              .value
+                            e.target.value
                           )
                         }
                         style={
@@ -2154,8 +1999,6 @@ export default function TicketPage() {
               )}
             </section>
 
-            {/* INFO */}
-
             <section
               style={styles.infoCard}
             >
@@ -2202,8 +2045,6 @@ export default function TicketPage() {
           </aside>
         </div>
       </div>
-
-      {/* VISOR IMAGEN */}
 
       {imagenAmpliada && (
         <div
@@ -2277,28 +2118,47 @@ function Header({
           </div>
         </div>
 
-        <div style={styles.userArea}>
-          <div style={styles.userInfo}>
-            <span
-              style={styles.userEmail}
-            >
-              {email}
-            </span>
-
-            <span style={styles.role}>
-              {rol === "ADMIN"
-                ? "ADMINISTRADOR"
-                : "USUARIO"}
-            </span>
-          </div>
-
-          <button
-            onClick={onLogout}
-            style={styles.logout}
-            title="Cerrar sesión"
+        <div style={styles.headerActions}>
+          <a
+            href="https://globalcoffeeindustriassa.sharepoint.com/:f:/g/IgAX4zmqxaTCQ6GyOQ9lakgSAeFKPNoWDIPRPPApKvf1Vhs?e=lq5SPl"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.manualsLink}
           >
-            <LogoutIcon />
-          </button>
+            <BookIcon />
+            <span>Manuales</span>
+            <ExternalIcon />
+          </a>
+
+          <div
+            style={styles.headerDivider}
+          />
+
+          <div style={styles.userArea}>
+            <div
+              style={styles.userInfo}
+            >
+              <span
+                style={styles.userEmail}
+              >
+                {email}
+              </span>
+
+              <span style={styles.role}>
+                {rol === "ADMIN"
+                  ? "ADMINISTRADOR"
+                  : "USUARIO"}
+              </span>
+            </div>
+
+            <button
+              onClick={onLogout}
+              style={styles.logout}
+              title="Cerrar sesión"
+            >
+              <LogoutIcon />
+            </button>
+          </div>
         </div>
       </div>
     </header>
@@ -2763,6 +2623,43 @@ function AlertIcon() {
   );
 }
 
+function BookIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+    </svg>
+  );
+}
+
+function ExternalIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </svg>
+  );
+}
+
 function LogoutIcon() {
   return (
     <svg
@@ -2809,9 +2706,9 @@ const styles: Record<
   },
 
   loadingIcon: {
-    width: "44px",
-    height: "44px",
-    borderRadius: "11px",
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
     background: "#e9f8f5",
     display: "flex",
     alignItems: "center",
@@ -2821,7 +2718,7 @@ const styles: Record<
   loadingText: {
     margin: 0,
     color: "#7b8282",
-    fontSize: "11px",
+    fontSize: "13px",
   },
 
   header: {
@@ -2831,10 +2728,10 @@ const styles: Record<
   },
 
   headerInner: {
-    maxWidth: "1240px",
-    minHeight: "78px",
+    maxWidth: "1320px",
+    minHeight: "86px",
     margin: "0 auto",
-    padding: "0 30px",
+    padding: "0 32px",
     display: "flex",
     alignItems: "center",
     justifyContent:
@@ -2848,9 +2745,9 @@ const styles: Record<
   },
 
   logoIcon: {
-    width: "44px",
-    height: "44px",
-    borderRadius: "11px",
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
     background: "#00AF9A",
     display: "flex",
     alignItems: "center",
@@ -2858,14 +2755,44 @@ const styles: Record<
   },
 
   brandTitle: {
-    fontSize: "17px",
+    fontSize: "19px",
     fontWeight: 700,
   },
 
   brandSubtitle: {
     marginTop: "3px",
     color: "#8a9191",
-    fontSize: "11px",
+    fontSize: "12px",
+  },
+
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "18px",
+  },
+
+  manualsLink: {
+    height: "40px",
+    padding: "0 14px",
+    border: "1px solid #dfe4e4",
+    borderRadius: "9px",
+    background: "#ffffff",
+    color: "#555d5d",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "12px",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
+
+  headerDivider: {
+    width: "1px",
+    height: "34px",
+    background: "#e7ebeb",
   },
 
   userArea: {
@@ -2882,7 +2809,7 @@ const styles: Record<
   },
 
   userEmail: {
-    fontSize: "12px",
+    fontSize: "13px",
     fontWeight: 500,
   },
 
@@ -2893,8 +2820,8 @@ const styles: Record<
   },
 
   logout: {
-    width: "38px",
-    height: "38px",
+    width: "42px",
+    height: "42px",
     border:
       "1px solid #dfe4e4",
     borderRadius: "9px",
@@ -2907,10 +2834,10 @@ const styles: Record<
   },
 
   container: {
-    width: "calc(100% - 48px)",
-    maxWidth: "1180px",
+    width: "calc(100% - 56px)",
+    maxWidth: "1260px",
     margin: "0 auto",
-    padding: "32px 0 70px",
+    padding: "38px 0 76px",
   },
 
   backButton: {
@@ -2924,7 +2851,7 @@ const styles: Record<
     gap: "6px",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    fontSize: "13px",
     cursor: "pointer",
   },
 
@@ -2943,7 +2870,7 @@ const styles: Record<
 
   ticketNumber: {
     color: "#00A992",
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 700,
     letterSpacing: "0.6px",
     marginBottom: "5px",
@@ -2951,7 +2878,7 @@ const styles: Record<
 
   pageTitle: {
     margin: "0 0 8px",
-    fontSize: "26px",
+    fontSize: "28px",
     fontWeight: 700,
   },
 
@@ -2961,7 +2888,7 @@ const styles: Record<
     flexWrap: "wrap",
     alignItems: "center",
     gap: "7px",
-    fontSize: "10px",
+    fontSize: "12px",
   },
 
   metaDot: {
@@ -2982,24 +2909,23 @@ const styles: Record<
 
   controlLabel: {
     color: "#8e9696",
-    fontSize: "9px",
+    fontSize: "11px",
   },
 
   controlSelect: {
-    minWidth: "125px",
-    height: "36px",
+    minWidth: "140px",
+    height: "40px",
     border: "1px solid",
     borderRadius: "8px",
     padding: "0 10px",
     outline: "none",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
   },
-
-  layout: {
+    layout: {
     display: "grid",
     gridTemplateColumns:
       "minmax(0, 1.8fr) minmax(300px, 0.8fr)",
@@ -3020,7 +2946,7 @@ const styles: Record<
     border:
       "1px solid #e5e9e9",
     borderRadius: "14px",
-    padding: "23px",
+    padding: "26px",
     marginBottom: "20px",
   },
 
@@ -3045,8 +2971,8 @@ const styles: Record<
   },
 
   sectionIcon: {
-    width: "40px",
-    height: "40px",
+    width: "44px",
+    height: "44px",
     borderRadius: "10px",
     background: "#ecf9f7",
     color: "#00A992",
@@ -3058,14 +2984,14 @@ const styles: Record<
 
   cardTitle: {
     margin: "0 0 3px",
-    fontSize: "14px",
+    fontSize: "16px",
     fontWeight: 700,
   },
 
   cardSubtitle: {
     margin: 0,
     color: "#8a9191",
-    fontSize: "10px",
+    fontSize: "12px",
   },
 
   readOnlyField: {
@@ -3074,15 +3000,15 @@ const styles: Record<
 
   fieldLabel: {
     display: "block",
-    marginBottom: "7px",
+    marginBottom: "8px",
     color: "#444a4a",
-    fontSize: "10px",
+    fontSize: "12px",
     fontWeight: 600,
   },
 
   readOnlyValue: {
     color: "#303535",
-    fontSize: "13px",
+    fontSize: "14px",
     fontWeight: 500,
   },
 
@@ -3093,7 +3019,7 @@ const styles: Record<
     borderRadius: "9px",
     padding: "15px",
     color: "#4f5656",
-    fontSize: "12px",
+    fontSize: "13px",
     lineHeight: 1.7,
     whiteSpace: "pre-wrap",
   },
@@ -3106,7 +3032,7 @@ const styles: Record<
 
   input: {
     width: "100%",
-    height: "40px",
+    height: "44px",
     boxSizing: "border-box",
     border:
       "1px solid #d9dede",
@@ -3117,19 +3043,19 @@ const styles: Record<
     outlineColor: "#00AF9A",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    fontSize: "12px",
   },
 
   editHint: {
     margin: "2px 0 0 0",
     color: "#939a9a",
-    fontSize: "8px",
+    fontSize: "10px",
     lineHeight: 1.5,
   },
 
   badge: {
-    minWidth: "105px",
-    height: "36px",
+    minWidth: "118px",
+    height: "40px",
     boxSizing: "border-box",
     border: "1px solid",
     borderRadius: "8px",
@@ -3137,7 +3063,7 @@ const styles: Record<
     display: "inline-flex",
     alignItems: "center",
     gap: "7px",
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 600,
     whiteSpace: "nowrap",
   },
@@ -3159,13 +3085,13 @@ const styles: Record<
     border:
       "1px solid #f0cece",
     color: "#a63d3d",
-    fontSize: "10px",
+    fontSize: "12px",
   },
 
   noFollowUps: {
     padding: "25px 0 30px",
     color: "#929999",
-    fontSize: "11px",
+    fontSize: "12px",
     textAlign: "center",
   },
 
@@ -3216,12 +3142,12 @@ const styles: Record<
   },
 
   timelineAuthor: {
-    fontSize: "10px",
+    fontSize: "12px",
   },
 
   timelineDate: {
     color: "#9aa1a1",
-    fontSize: "9px",
+    fontSize: "10px",
   },
 
   timelineMessage: {
@@ -3229,7 +3155,7 @@ const styles: Record<
     borderRadius: "8px",
     padding: "11px 13px",
     color: "#4d5454",
-    fontSize: "11px",
+    fontSize: "12px",
     lineHeight: 1.6,
     whiteSpace: "pre-wrap",
   },
@@ -3278,7 +3204,7 @@ const styles: Record<
     outlineColor: "#00AF9A",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    fontSize: "12px",
     lineHeight: 1.6,
   },
 
@@ -3337,8 +3263,8 @@ const styles: Record<
   },
 
   attachButton: {
-    height: "36px",
-    padding: "0 11px",
+    height: "40px",
+    padding: "0 13px",
     border:
       "1px solid #d7dddd",
     borderRadius: "8px",
@@ -3347,14 +3273,14 @@ const styles: Record<
     display: "inline-flex",
     alignItems: "center",
     gap: "7px",
-    fontSize: "9px",
+    fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
   },
 
   composerHint: {
     color: "#969d9d",
-    fontSize: "8px",
+    fontSize: "10px",
   },
 
   saveRight: {
@@ -3366,8 +3292,8 @@ const styles: Record<
   },
 
   saveButton: {
-    height: "40px",
-    padding: "0 15px",
+    height: "44px",
+    padding: "0 17px",
     border: "none",
     borderRadius: "8px",
     background: "#00AF9A",
@@ -3378,7 +3304,7 @@ const styles: Record<
     gap: "7px",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 600,
   },
 
@@ -3387,7 +3313,7 @@ const styles: Record<
     display: "inline-flex",
     alignItems: "center",
     gap: "5px",
-    fontSize: "9px",
+    fontSize: "11px",
     fontWeight: 600,
   },
 
@@ -3406,7 +3332,7 @@ const styles: Record<
     display: "inline-flex",
     alignItems: "center",
     gap: "6px",
-    fontSize: "9px",
+    fontSize: "10px",
     fontWeight: 600,
   },
 
@@ -3429,7 +3355,7 @@ const styles: Record<
   noTags: {
     margin: 0,
     color: "#929999",
-    fontSize: "10px",
+    fontSize: "11px",
   },
 
   tagDivider: {
@@ -3470,7 +3396,7 @@ const styles: Record<
     color: "#008f7e",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
   },
@@ -3492,7 +3418,7 @@ const styles: Record<
     borderBottom:
       "1px solid #f0f2f2",
     color: "#858d8d",
-    fontSize: "9px",
+    fontSize: "10px",
   },
 
   imageModal: {
@@ -3553,12 +3479,12 @@ const styles: Record<
 
   notFoundTitle: {
     margin: "0 0 7px",
-    fontSize: "17px",
+    fontSize: "18px",
   },
 
   notFoundText: {
     margin: 0,
     color: "#8a9191",
-    fontSize: "11px",
+    fontSize: "12px",
   },
 };
