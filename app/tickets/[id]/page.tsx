@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
+import { EMPRESAS } from "../../../lib/empresas";
 
 type Rol = "ADMIN" | "USUARIO";
 type Estado = "PENDIENTE" | "EN_CURSO" | "RESUELTO";
@@ -77,20 +78,29 @@ export default function TicketPage() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
 
-  // CONTACTO
+  /* =========================================================
+     CONTACTO
+  ========================================================= */
+
   const [nombre, setNombre] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
 
-  // ADMIN
+  /* =========================================================
+     ADMIN
+  ========================================================= */
+
   const [estadoEditado, setEstadoEditado] =
     useState<Estado>("PENDIENTE");
 
   const [importanciaEditada, setImportanciaEditada] =
     useState<Importancia>("BAJA");
 
-  // SEGUIMIENTO
+  /* =========================================================
+     SEGUIMIENTO
+  ========================================================= */
+
   const [seguimientos, setSeguimientos] =
     useState<Seguimiento[]>([]);
 
@@ -106,7 +116,10 @@ export default function TicketPage() {
   const [imagenAmpliada, setImagenAmpliada] =
     useState<string | null>(null);
 
-  // TAGS
+  /* =========================================================
+     TAGS
+  ========================================================= */
+
   const [tags, setTags] = useState<Tag[]>([]);
 
   const [tagsTicketOriginales, setTagsTicketOriginales] =
@@ -120,7 +133,10 @@ export default function TicketPage() {
   const [nuevoTagColor, setNuevoTagColor] =
     useState("#00AF9A");
 
-  // MENSAJES
+  /* =========================================================
+     MENSAJES
+  ========================================================= */
+
   const [error, setError] = useState("");
   const [mensajeGuardado, setMensajeGuardado] =
     useState("");
@@ -320,9 +336,7 @@ export default function TicketPage() {
       const asignados: Tag[] = [];
 
       relaciones.forEach((relacion: any) => {
-        const tagData = Array.isArray(
-          relacion.it_tags
-        )
+        const tagData = Array.isArray(relacion.it_tags)
           ? relacion.it_tags[0]
           : relacion.it_tags;
 
@@ -359,12 +373,12 @@ export default function TicketPage() {
      DETECTAR CAMBIOS
   ========================================================= */
 
-  const hayCambiosUsuario = useMemo(() => {
+  const hayCambiosContacto = useMemo(() => {
     if (!ticket) return false;
 
     return (
       nombre.trim() !== (ticket.nombre ?? "") ||
-      empresa.trim() !== (ticket.empresa ?? "") ||
+      empresa !== (ticket.empresa ?? "") ||
       email.trim() !== (ticket.email ?? "") ||
       telefono.trim() !== (ticket.telefono ?? "")
     );
@@ -377,7 +391,7 @@ export default function TicketPage() {
   ]);
 
   const hayCambiosAdmin = useMemo(() => {
-    if (!ticket) return false;
+    if (!ticket || rol !== "ADMIN") return false;
 
     const originales = tagsTicketOriginales
       .map((tag) => tag.id)
@@ -396,6 +410,7 @@ export default function TicketPage() {
     );
   }, [
     ticket,
+    rol,
     estadoEditado,
     importanciaEditada,
     tagsTicket,
@@ -407,20 +422,21 @@ export default function TicketPage() {
     imagenesPendientes.length > 0;
 
   const hayCualquierCambio =
-    rol === "ADMIN"
-      ? hayCambiosAdmin || haySeguimientoPendiente
-      : hayCambiosUsuario || haySeguimientoPendiente;
+    hayCambiosContacto ||
+    (rol === "ADMIN" && hayCambiosAdmin) ||
+    haySeguimientoPendiente;
 
   /* =========================================================
-     GUARDAR DATOS USUARIO
+     GUARDAR CONTACTO
+     ADMIN Y USUARIO
   ========================================================= */
 
-  async function guardarDatosUsuario() {
-    if (!ticket || rol !== "USUARIO") return;
+  async function guardarDatosContacto() {
+    if (!ticket) return;
 
     if (
       !nombre.trim() ||
-      !empresa.trim() ||
+      !empresa ||
       !email.trim()
     ) {
       throw new Error(
@@ -435,7 +451,7 @@ export default function TicketPage() {
         .from("it_tickets")
         .update({
           nombre: nombre.trim(),
-          empresa: empresa.trim(),
+          empresa,
           email: email.trim(),
           telefono: telefono.trim() || null,
           actualizado_en: ahora,
@@ -451,7 +467,7 @@ export default function TicketPage() {
         ? {
             ...actual,
             nombre: nombre.trim(),
-            empresa: empresa.trim(),
+            empresa,
             email: email.trim(),
             telefono: telefono.trim() || null,
             actualizado_en: ahora,
@@ -507,17 +523,11 @@ export default function TicketPage() {
       throw ticketError;
     }
 
-    /* TAGS */
-
     const idsOriginales =
-      tagsTicketOriginales.map(
-        (tag) => tag.id
-      );
+      tagsTicketOriginales.map((tag) => tag.id);
 
     const idsActuales =
-      tagsTicket.map(
-        (tag) => tag.id
-      );
+      tagsTicket.map((tag) => tag.id);
 
     const tagsParaAñadir =
       idsActuales.filter(
@@ -569,17 +579,13 @@ export default function TicketPage() {
             estado: estadoEditado,
             importancia: importanciaEditada,
             actualizado_en: ahora,
-            resuelto_en:
-              cambiosTicket.resuelto_en,
-            resuelto_por:
-              cambiosTicket.resuelto_por,
+            resuelto_en: cambiosTicket.resuelto_en,
+            resuelto_por: cambiosTicket.resuelto_por,
           }
         : actual
     );
 
-    setTagsTicketOriginales([
-      ...tagsTicket,
-    ]);
+    setTagsTicketOriginales([...tagsTicket]);
   }
 
   /* =========================================================
@@ -633,14 +639,11 @@ export default function TicketPage() {
     setMensajeGuardado("");
 
     const nombreNuevo =
-      nuevoTagNombre
-        .trim()
-        .toUpperCase();
+      nuevoTagNombre.trim().toUpperCase();
 
     const existente = tags.find(
       (tag) =>
-        tag.nombre.toUpperCase() ===
-        nombreNuevo
+        tag.nombre.toUpperCase() === nombreNuevo
     );
 
     if (existente) {
@@ -678,13 +681,10 @@ export default function TicketPage() {
     );
 
     /*
-     * IMPORTANTE:
-     * Crear el tag NO lo mete todavía en
-     * it_ticket_tags.
-     *
-     * Solo lo dejamos seleccionado.
-     * El botón Guardar cambios hará la relación.
-     */
+      No creamos todavía la relación con el ticket.
+      Solo lo añadimos al estado local.
+      Guardar cambios hará la relación.
+    */
     setTagsTicket((actuales) => {
       if (
         actuales.some(
@@ -702,16 +702,14 @@ export default function TicketPage() {
   }
 
   /* =========================================================
-     IMÁGENES
+     IMÁGENES PENDIENTES
   ========================================================= */
 
   function seleccionarImagenes(
     event: ChangeEvent<HTMLInputElement>
   ) {
     const seleccionadas =
-      Array.from(
-        event.target.files ?? []
-      );
+      Array.from(event.target.files ?? []);
 
     if (seleccionadas.length === 0) {
       return;
@@ -729,14 +727,12 @@ export default function TicketPage() {
     const invalidas =
       seleccionadas.filter(
         (file) =>
-          !tiposPermitidos.includes(
-            file.type
-          )
+          !tiposPermitidos.includes(file.type)
       );
 
     if (invalidas.length > 0) {
       setError(
-        "Solo se pueden adjuntar imágenes JPG, JPEG, PNG o WEBP."
+        "Solo se pueden adjuntar imágenes JPG, PNG o WEBP."
       );
 
       event.target.value = "";
@@ -746,8 +742,7 @@ export default function TicketPage() {
     const demasiadoGrandes =
       seleccionadas.filter(
         (file) =>
-          file.size >
-          10 * 1024 * 1024
+          file.size > 10 * 1024 * 1024
       );
 
     if (demasiadoGrandes.length > 0) {
@@ -762,8 +757,7 @@ export default function TicketPage() {
     const nuevas =
       seleccionadas.map((file) => ({
         file,
-        preview:
-          URL.createObjectURL(file),
+        preview: URL.createObjectURL(file),
       }));
 
     setImagenesPendientes(
@@ -776,24 +770,18 @@ export default function TicketPage() {
     event.target.value = "";
   }
 
-  function quitarImagenPendiente(
-    index: number
-  ) {
-    setImagenesPendientes(
-      (actuales) => {
-        const imagen = actuales[index];
+  function quitarImagenPendiente(index: number) {
+    setImagenesPendientes((actuales) => {
+      const imagen = actuales[index];
 
-        if (imagen) {
-          URL.revokeObjectURL(
-            imagen.preview
-          );
-        }
-
-        return actuales.filter(
-          (_, i) => i !== index
-        );
+      if (imagen) {
+        URL.revokeObjectURL(imagen.preview);
       }
-    );
+
+      return actuales.filter(
+        (_, i) => i !== index
+      );
+    });
 
     setMensajeGuardado("");
   }
@@ -805,8 +793,7 @@ export default function TicketPage() {
   async function guardarSeguimiento() {
     if (!ticket) return;
 
-    const texto =
-      nuevoSeguimiento.trim();
+    const texto = nuevoSeguimiento.trim();
 
     if (
       !texto &&
@@ -815,11 +802,6 @@ export default function TicketPage() {
       return;
     }
 
-    /*
-     * mensaje es NOT NULL.
-     * Si solo hay imágenes utilizamos este
-     * valor interno y no lo mostramos.
-     */
     const mensajeBD =
       texto || "Imagen adjunta";
 
@@ -864,8 +846,7 @@ export default function TicketPage() {
         imagen.file.name
           .split(".")
           .pop()
-          ?.toLowerCase() ??
-        "jpg";
+          ?.toLowerCase() ?? "jpg";
 
       const nombreSeguro =
         imagen.file.name
@@ -876,10 +857,6 @@ export default function TicketPage() {
           )
           .slice(0, 70);
 
-      /*
-       * Añadimos índice + random para
-       * impedir nombres duplicados.
-       */
       const ruta =
         `${ticket.id}/` +
         `${seguimiento.id}/` +
@@ -908,9 +885,7 @@ export default function TicketPage() {
         data: archivoData,
         error: archivoError,
       } = await supabase
-        .from(
-          "it_seguimiento_archivos"
-        )
+        .from("it_seguimiento_archivos")
         .insert({
           seguimiento_id:
             seguimiento.id,
@@ -982,7 +957,7 @@ export default function TicketPage() {
   }
 
   /* =========================================================
-     ÚNICO BOTÓN GUARDAR
+     ÚNICO GUARDAR
   ========================================================= */
 
   async function guardarTodo() {
@@ -1001,8 +976,17 @@ export default function TicketPage() {
 
     try {
       /*
-       * ADMIN
-       */
+        CONTACTO
+        ADMIN y USUARIO
+      */
+      if (hayCambiosContacto) {
+        await guardarDatosContacto();
+      }
+
+      /*
+        ADMIN
+        Estado, importancia y tags
+      */
       if (
         rol === "ADMIN" &&
         hayCambiosAdmin
@@ -1011,22 +995,9 @@ export default function TicketPage() {
       }
 
       /*
-       * USUARIO
-       */
-      if (
-        rol === "USUARIO" &&
-        hayCambiosUsuario
-      ) {
-        await guardarDatosUsuario();
-      }
-
-      /*
-       * SEGUIMIENTO
-       *
-       * Funciona para ADMIN y USUARIO.
-       * También funciona si SOLO
-       * hemos adjuntado una imagen.
-       */
+        SEGUIMIENTO
+        Texto y/o imágenes
+      */
       if (haySeguimientoPendiente) {
         await guardarSeguimiento();
       }
@@ -1326,14 +1297,11 @@ export default function TicketPage() {
           </div>
         </section>
 
-        {/* ERROR */}
-
         {error && (
           <div
             style={styles.errorMessage}
           >
             <AlertIcon />
-
             <span>{error}</span>
           </div>
         )}
@@ -1466,8 +1434,6 @@ export default function TicketPage() {
                   </p>
                 </div>
               </div>
-
-              {/* HISTORIAL */}
 
               {seguimientos.length ===
               0 ? (
@@ -1628,7 +1594,7 @@ export default function TicketPage() {
                 </div>
               )}
 
-              {/* NUEVA NOTA */}
+              {/* NUEVO SEGUIMIENTO */}
 
               <div
                 style={
@@ -1659,8 +1625,6 @@ export default function TicketPage() {
                   }
                   style={styles.textarea}
                 />
-
-                {/* PREVIEW */}
 
                 {imagenesPendientes.length >
                   0 && (
@@ -1707,8 +1671,6 @@ export default function TicketPage() {
                     )}
                   </div>
                 )}
-
-                {/* ACCIONES */}
 
                 <div
                   style={
@@ -1810,9 +1772,7 @@ export default function TicketPage() {
           >
             {/* CONTACTO */}
 
-            <section
-              style={styles.card}
-            >
+            <section style={styles.card}>
               <div
                 style={
                   styles.cardHeadingCompact
@@ -1856,43 +1816,63 @@ export default function TicketPage() {
                       setNombre(
                         e.target.value
                       );
+
                       setMensajeGuardado(
                         ""
                       );
                     }}
-                    disabled={
-                      rol === "ADMIN"
-                    }
-                    style={{
-                      ...styles.input,
-                      ...(rol === "ADMIN"
-                        ? styles.disabledInput
-                        : {}),
-                    }}
+                    style={styles.input}
                   />
                 </Field>
 
                 <Field label="Empresa">
-                  <input
+                  <select
                     value={empresa}
                     onChange={(e) => {
                       setEmpresa(
                         e.target.value
                       );
+
                       setMensajeGuardado(
                         ""
                       );
                     }}
-                    disabled={
-                      rol === "ADMIN"
-                    }
-                    style={{
-                      ...styles.input,
-                      ...(rol === "ADMIN"
-                        ? styles.disabledInput
-                        : {}),
-                    }}
-                  />
+                    style={styles.input}
+                  >
+                    <option value="">
+                      Seleccionar empresa...
+                    </option>
+
+                    {empresa &&
+                      !EMPRESAS.includes(
+                        empresa as any
+                      ) && (
+                        <option
+                          value={empresa}
+                        >
+                          {empresa}
+                        </option>
+                      )}
+
+                    {EMPRESAS.map(
+                      (
+                        empresaItem
+                      ) => (
+                        <option
+                          key={
+                            empresaItem
+                          }
+                          value={
+                            empresaItem
+                          }
+                        >
+                          {
+                            empresaItem
+                          }
+                        </option>
+                      )
+                    )}
+                  </select>
                 </Field>
 
                 <Field label="Correo electrónico">
@@ -1903,19 +1883,12 @@ export default function TicketPage() {
                       setEmail(
                         e.target.value
                       );
+
                       setMensajeGuardado(
                         ""
                       );
                     }}
-                    disabled={
-                      rol === "ADMIN"
-                    }
-                    style={{
-                      ...styles.input,
-                      ...(rol === "ADMIN"
-                        ? styles.disabledInput
-                        : {}),
-                    }}
+                    style={styles.input}
                   />
                 </Field>
 
@@ -1926,35 +1899,26 @@ export default function TicketPage() {
                       setTelefono(
                         e.target.value
                       );
+
                       setMensajeGuardado(
                         ""
                       );
                     }}
-                    disabled={
-                      rol === "ADMIN"
-                    }
-                    style={{
-                      ...styles.input,
-                      ...(rol === "ADMIN"
-                        ? styles.disabledInput
-                        : {}),
-                    }}
+                    style={styles.input}
                   />
                 </Field>
 
-                {rol === "USUARIO" && (
-                  <p
-                    style={
-                      styles.editHint
-                    }
-                  >
-                    Puedes corregir estos
-                    datos si detectas alguna
-                    errata. Los cambios se
-                    guardan con el botón
-                    inferior.
-                  </p>
-                )}
+                <p
+                  style={
+                    styles.editHint
+                  }
+                >
+                  Estos datos pueden
+                  corregirse si se detecta
+                  alguna errata. Los
+                  cambios se aplicarán al
+                  pulsar Guardar cambios.
+                </p>
               </div>
             </section>
 
@@ -3156,15 +3120,8 @@ const styles: Record<
     fontSize: "11px",
   },
 
-  disabledInput: {
-    background: "#f7f9f9",
-    color: "#717979",
-    cursor: "default",
-  },
-
   editHint: {
-    margin:
-      "2px 0 0 0",
+    margin: "2px 0 0 0",
     color: "#939a9a",
     fontSize: "8px",
     lineHeight: 1.5,
