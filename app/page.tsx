@@ -246,63 +246,175 @@ export default function HomePage() {
   ) {
     if (rol !== "ADMIN") return;
 
+    const ticketActual = tickets.find(
+      (ticket) => ticket.id === ticketId
+    );
+
+    if (!ticketActual) return;
+
+    // Si realmente no cambia el estado, no hacemos nada.
+    if (ticketActual.estado === nuevoEstado) return;
+
+    const estadoAnterior = ticketActual.estado;
+
     setActualizandoId(ticketId);
     setErrorCarga("");
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
 
-    const ahora = new Date().toISOString();
+      const ahora = new Date().toISOString();
 
-    const cambios =
-      nuevoEstado === "RESUELTO"
-        ? {
-            estado: nuevoEstado,
-            actualizado_en: ahora,
-            resuelto_en: ahora,
-            resuelto_por: user.id,
+      const cambios =
+        nuevoEstado === "RESUELTO"
+          ? {
+              estado: nuevoEstado,
+              actualizado_en: ahora,
+              resuelto_en: ahora,
+              resuelto_por: user.id,
+            }
+          : {
+              estado: nuevoEstado,
+              actualizado_en: ahora,
+              resuelto_en: null,
+              resuelto_por: null,
+            };
+
+      const { error } = await supabase
+        .from("it_tickets")
+        .update(cambios)
+        .eq("id", ticketId);
+
+      if (error) {
+        console.error(error);
+
+        setErrorCarga(
+          `No se ha podido actualizar el estado: ${error.message}`
+        );
+
+        return;
+      }
+
+      // Actualizamos primero la interfaz.
+      setTickets((actuales) =>
+        actuales.map((ticket) =>
+          ticket.id === ticketId
+            ? {
+                ...ticket,
+                ...cambios,
+              }
+            : ticket
+        )
+      );
+
+      /* =====================================================
+         NOTIFICACIÓN: EN CURSO
+      ===================================================== */
+
+      const pasaAEnCurso =
+        estadoAnterior !== "EN_CURSO" &&
+        nuevoEstado === "EN_CURSO";
+
+      if (pasaAEnCurso) {
+        try {
+          const respuestaCorreo = await fetch(
+            "/api/tickets/gestionado",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                numero: ticketActual.numero,
+                ticketId: ticketActual.id,
+                titulo: ticketActual.titulo,
+                nombre: ticketActual.nombre,
+                empresa: ticketActual.empresa,
+                email: ticketActual.email,
+              }),
+            }
+          );
+
+          if (!respuestaCorreo.ok) {
+            const detalle = await respuestaCorreo
+              .json()
+              .catch(() => null);
+
+            console.error(
+              "El estado se actualizó, pero no se pudo enviar el correo de incidencia en gestión:",
+              detalle
+            );
           }
-        : {
-            estado: nuevoEstado,
-            actualizado_en: ahora,
-            resuelto_en: null,
-            resuelto_por: null,
-          };
+        } catch (correoError) {
+          console.error(
+            "El estado se actualizó, pero falló la notificación de incidencia en gestión:",
+            correoError
+          );
+        }
+      }
 
-    const { error } = await supabase
-      .from("it_tickets")
-      .update(cambios)
-      .eq("id", ticketId);
+      /* =====================================================
+         NOTIFICACIÓN: RESUELTO
+      ===================================================== */
 
-    if (error) {
+      const pasaAResuelto =
+        estadoAnterior !== "RESUELTO" &&
+        nuevoEstado === "RESUELTO";
+
+      if (pasaAResuelto) {
+        try {
+          const respuestaCorreo = await fetch(
+            "/api/tickets/resuelto",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                numero: ticketActual.numero,
+                ticketId: ticketActual.id,
+                titulo: ticketActual.titulo,
+                nombre: ticketActual.nombre,
+                empresa: ticketActual.empresa,
+                email: ticketActual.email,
+              }),
+            }
+          );
+
+          if (!respuestaCorreo.ok) {
+            const detalle = await respuestaCorreo
+              .json()
+              .catch(() => null);
+
+            console.error(
+              "El estado se actualizó, pero no se pudo enviar el correo de incidencia resuelta:",
+              detalle
+            );
+          }
+        } catch (correoError) {
+          console.error(
+            "El estado se actualizó, pero falló la notificación de incidencia resuelta:",
+            correoError
+          );
+        }
+      }
+    } catch (error: any) {
       console.error(error);
 
       setErrorCarga(
-        `No se ha podido actualizar el estado: ${error.message}`
+        error?.message ??
+          "No se ha podido actualizar el estado."
       );
-
+    } finally {
       setActualizandoId(null);
-      return;
     }
-
-    setTickets((actuales) =>
-      actuales.map((ticket) =>
-        ticket.id === ticketId
-          ? {
-              ...ticket,
-              ...cambios,
-            }
-          : ticket
-      )
-    );
-
-    setActualizandoId(null);
   }
 
   /* =========================================================
@@ -353,7 +465,9 @@ export default function HomePage() {
             </div>
 
             <div>
-              <div style={styles.brandTitle}>IT Support</div>
+              <div style={styles.brandTitle}>
+                IT Support
+              </div>
 
               <div style={styles.brandSubtitle}>
                 Gestión de incidencias informáticas
@@ -377,10 +491,14 @@ export default function HomePage() {
 
             <div style={styles.userArea}>
               <div style={styles.userInfo}>
-                <span style={styles.userEmail}>{email}</span>
+                <span style={styles.userEmail}>
+                  {email}
+                </span>
 
                 <span style={styles.role}>
-                  {rol === "ADMIN" ? "ADMINISTRADOR" : "USUARIO"}
+                  {rol === "ADMIN"
+                    ? "ADMINISTRADOR"
+                    : "USUARIO"}
                 </span>
               </div>
 
@@ -415,7 +533,9 @@ export default function HomePage() {
 
           <button
             type="button"
-            onClick={() => router.push("/nuevo-ticket")}
+            onClick={() =>
+              router.push("/nuevo-ticket")
+            }
             style={styles.newTicketButton}
           >
             <PlusIcon />
@@ -481,7 +601,9 @@ export default function HomePage() {
 
               <input
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
+                onChange={(e) =>
+                  setBusqueda(e.target.value)
+                }
                 placeholder="Buscar por nº, usuario, empresa, correo o incidencia..."
                 style={styles.searchInput}
               />
@@ -492,13 +614,23 @@ export default function HomePage() {
             <FilterField label="Fecha">
               <select
                 value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
+                onChange={(e) =>
+                  setFecha(e.target.value)
+                }
                 style={styles.select}
               >
-                <option value="TODAS">Todas</option>
-                <option value="HOY">Hoy</option>
-                <option value="7_DIAS">Últimos 7 días</option>
-                <option value="30_DIAS">Últimos 30 días</option>
+                <option value="TODAS">
+                  Todas
+                </option>
+                <option value="HOY">
+                  Hoy
+                </option>
+                <option value="7_DIAS">
+                  Últimos 7 días
+                </option>
+                <option value="30_DIAS">
+                  Últimos 30 días
+                </option>
               </select>
             </FilterField>
 
@@ -506,14 +638,24 @@ export default function HomePage() {
               <select
                 value={estado}
                 onChange={(e) =>
-                  setEstado(e.target.value as EstadoFiltro)
+                  setEstado(
+                    e.target.value as EstadoFiltro
+                  )
                 }
                 style={styles.select}
               >
-                <option value="TODOS">Todos</option>
-                <option value="PENDIENTE">Pendiente</option>
-                <option value="EN_CURSO">En curso</option>
-                <option value="RESUELTO">Resuelto</option>
+                <option value="TODOS">
+                  Todos
+                </option>
+                <option value="PENDIENTE">
+                  Pendiente
+                </option>
+                <option value="EN_CURSO">
+                  En curso
+                </option>
+                <option value="RESUELTO">
+                  Resuelto
+                </option>
               </select>
             </FilterField>
 
@@ -522,19 +664,25 @@ export default function HomePage() {
                 <FilterField label="Empresa">
                   <select
                     value={empresa}
-                    onChange={(e) => setEmpresa(e.target.value)}
+                    onChange={(e) =>
+                      setEmpresa(e.target.value)
+                    }
                     style={styles.select}
                   >
-                    <option value="TODAS">Todas</option>
+                    <option value="TODAS">
+                      Todas
+                    </option>
 
-                    {EMPRESAS.map((empresaItem) => (
-                      <option
-                        key={empresaItem}
-                        value={empresaItem}
-                      >
-                        {empresaItem}
-                      </option>
-                    ))}
+                    {EMPRESAS.map(
+                      (empresaItem) => (
+                        <option
+                          key={empresaItem}
+                          value={empresaItem}
+                        >
+                          {empresaItem}
+                        </option>
+                      )
+                    )}
                   </select>
                 </FilterField>
 
@@ -542,22 +690,36 @@ export default function HomePage() {
                   <select
                     value={importancia}
                     onChange={(e) =>
-                      setImportancia(e.target.value)
+                      setImportancia(
+                        e.target.value
+                      )
                     }
                     style={styles.select}
                   >
-                    <option value="TODAS">Todas</option>
-                    <option value="BAJA">Baja</option>
-                    <option value="MEDIA">Media</option>
-                    <option value="ALTA">Alta</option>
-                    <option value="URGENTE">Urgente</option>
+                    <option value="TODAS">
+                      Todas
+                    </option>
+                    <option value="BAJA">
+                      Baja
+                    </option>
+                    <option value="MEDIA">
+                      Media
+                    </option>
+                    <option value="ALTA">
+                      Alta
+                    </option>
+                    <option value="URGENTE">
+                      Urgente
+                    </option>
                   </select>
                 </FilterField>
 
                 <FilterField label="Orden">
                   <select
                     value={orden}
-                    onChange={(e) => setOrden(e.target.value)}
+                    onChange={(e) =>
+                      setOrden(e.target.value)
+                    }
                     style={styles.select}
                   >
                     <option value="RECIENTES">
@@ -586,7 +748,9 @@ export default function HomePage() {
           <div style={styles.listHeader}>
             <div>
               <h2 style={styles.listTitle}>
-                {rol === "ADMIN" ? "Incidencias" : "Mis tickets"}
+                {rol === "ADMIN"
+                  ? "Incidencias"
+                  : "Mis tickets"}
               </h2>
 
               <p style={styles.listSubtitle}>
@@ -609,26 +773,37 @@ export default function HomePage() {
               </h3>
 
               <p style={styles.emptyText}>
-                No se han encontrado tickets con los filtros
-                seleccionados.
+                No se han encontrado tickets con los
+                filtros seleccionados.
               </p>
             </div>
           ) : (
             <div style={styles.ticketList}>
-              {ticketsFiltrados.map((ticket) => (
-                <TicketRow
-                  key={ticket.id}
-                  ticket={ticket}
-                  rol={rol}
-                  actualizando={actualizandoId === ticket.id}
-                  onOpen={() =>
-                    router.push(`/tickets/${ticket.id}`)
-                  }
-                  onEstadoChange={(nuevoEstado) =>
-                    cambiarEstadoTicket(ticket.id, nuevoEstado)
-                  }
-                />
-              ))}
+              {ticketsFiltrados.map(
+                (ticket) => (
+                  <TicketRow
+                    key={ticket.id}
+                    ticket={ticket}
+                    rol={rol}
+                    actualizando={
+                      actualizandoId === ticket.id
+                    }
+                    onOpen={() =>
+                      router.push(
+                        `/tickets/${ticket.id}`
+                      )
+                    }
+                    onEstadoChange={(
+                      nuevoEstado
+                    ) =>
+                      cambiarEstadoTicket(
+                        ticket.id,
+                        nuevoEstado
+                      )
+                    }
+                  />
+                )
+              )}
             </div>
           )}
         </section>
@@ -636,7 +811,6 @@ export default function HomePage() {
     </main>
   );
 }
-
 /* =========================================================
    STATUS CARD
 ========================================================= */
@@ -719,7 +893,9 @@ function StatusCard({
           {count}
         </div>
 
-        <div style={styles.statusTitle}>{title}</div>
+        <div style={styles.statusTitle}>
+          {title}
+        </div>
       </div>
     </button>
   );
@@ -750,7 +926,9 @@ function TicketRow({
       <div style={styles.ticketMain}>
         <div style={styles.ticketTopLine}>
           <span style={styles.ticketNumber}>
-            {ticket.numero ? `#${ticket.numero}` : "Ticket"}
+            {ticket.numero
+              ? `#${ticket.numero}`
+              : "Ticket"}
           </span>
 
           <span style={styles.ticketDate}>
@@ -771,7 +949,10 @@ function TicketRow({
 
           {rol === "ADMIN" && (
             <>
-              <span style={styles.metaDot}>•</span>
+              <span style={styles.metaDot}>
+                •
+              </span>
+
               <span>{ticket.email}</span>
             </>
           )}
@@ -780,14 +961,18 @@ function TicketRow({
 
       <div
         style={styles.ticketActions}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) =>
+          e.stopPropagation()
+        }
       >
         <div style={styles.actionBlock}>
           <span style={styles.actionLabel}>
             Importancia
           </span>
 
-          <PriorityBadge importancia={ticket.importancia} />
+          <PriorityBadge
+            importancia={ticket.importancia}
+          />
         </div>
 
         <div style={styles.actionBlock}>
@@ -800,12 +985,18 @@ function TicketRow({
               value={ticket.estado}
               disabled={actualizando}
               onChange={(e) =>
-                onEstadoChange(e.target.value as Estado)
+                onEstadoChange(
+                  e.target.value as Estado
+                )
               }
               style={{
                 ...styles.estadoSelect,
-                ...getEstadoSelectStyle(ticket.estado),
-                opacity: actualizando ? 0.6 : 1,
+                ...getEstadoSelectStyle(
+                  ticket.estado
+                ),
+                opacity: actualizando
+                  ? 0.6
+                  : 1,
               }}
             >
               <option value="PENDIENTE">
@@ -821,7 +1012,9 @@ function TicketRow({
               </option>
             </select>
           ) : (
-            <StatusBadge estado={ticket.estado} />
+            <StatusBadge
+              estado={ticket.estado}
+            />
           )}
         </div>
 
@@ -1112,7 +1305,11 @@ function SearchIcon() {
       stroke="currentColor"
       strokeWidth="2"
     >
-      <circle cx="11" cy="11" r="7" />
+      <circle
+        cx="11"
+        cy="11"
+        r="7"
+      />
       <path d="m20 20-3.5-3.5" />
     </svg>
   );
@@ -1128,7 +1325,11 @@ function ClockIcon() {
       stroke="currentColor"
       strokeWidth="2"
     >
-      <circle cx="12" cy="12" r="9" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
       <path d="M12 7v5l3 2" />
     </svg>
   );
@@ -1160,7 +1361,11 @@ function CheckCircleIcon() {
       stroke="currentColor"
       strokeWidth="2"
     >
-      <circle cx="12" cy="12" r="9" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
       <path d="m8 12 2.5 2.5L16 9" />
     </svg>
   );
@@ -1206,7 +1411,11 @@ function AlertIcon() {
       stroke="currentColor"
       strokeWidth="2"
     >
-      <circle cx="12" cy="12" r="9" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
       <path d="M12 8v5" />
       <path d="M12 16h.01" />
     </svg>
@@ -1229,7 +1438,6 @@ function LogoutIcon() {
     </svg>
   );
 }
-
 /* =========================================================
    ESTILOS
 ========================================================= */
@@ -1246,11 +1454,11 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "100vh",
     background: "#f5f7f7",
     display: "flex",
+    flexDirection: "column",
+    gap: "14px",
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "column",
-    gap: "12px",
-    color: "#7e8787",
+    color: "#7b8282",
     fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "13px",
   },
@@ -1258,12 +1466,16 @@ const styles: Record<string, React.CSSProperties> = {
   loadingIcon: {
     width: "48px",
     height: "48px",
-    background: "#eaf8f6",
     borderRadius: "12px",
+    background: "#e9f8f5",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
+
+  /* =======================================================
+     HEADER
+  ======================================================= */
 
   header: {
     background: "#ffffff",
@@ -1299,14 +1511,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   brandTitle: {
+    color: "#202424",
     fontSize: "19px",
     fontWeight: 700,
+    lineHeight: 1.2,
   },
 
   brandSubtitle: {
-    color: "#899191",
-    fontSize: "12px",
     marginTop: "3px",
+    color: "#8a9191",
+    fontSize: "12px",
   },
 
   headerActions: {
@@ -1324,6 +1538,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#555d5d",
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: "8px",
     textDecoration: "none",
     fontFamily: "'Poppins', Arial, sans-serif",
@@ -1352,18 +1567,22 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   userEmail: {
+    color: "#353a3a",
     fontSize: "13px",
+    fontWeight: 500,
   },
 
   role: {
     color: "#00AF9A",
     fontSize: "10px",
     fontWeight: 700,
+    letterSpacing: "0.2px",
   },
 
   logoutButton: {
     width: "42px",
     height: "42px",
+    padding: 0,
     border: "1px solid #dfe4e4",
     borderRadius: "9px",
     background: "#ffffff",
@@ -1374,6 +1593,10 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
 
+  /* =======================================================
+     CONTENEDOR
+  ======================================================= */
+
   container: {
     width: "calc(100% - 56px)",
     maxWidth: "1260px",
@@ -1382,16 +1605,18 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   pageHeading: {
+    marginBottom: "26px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: "25px",
-    marginBottom: "28px",
+    gap: "20px",
   },
 
   title: {
-    margin: "0 0 6px",
+    margin: "0 0 5px",
+    color: "#202424",
     fontSize: "28px",
+    lineHeight: 1.25,
     fontWeight: 700,
   },
 
@@ -1399,108 +1624,123 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     color: "#858d8d",
     fontSize: "13px",
+    lineHeight: 1.5,
   },
 
   newTicketButton: {
     height: "46px",
-    padding: "0 19px",
+    padding: "0 18px",
     border: "none",
     borderRadius: "9px",
     background: "#00AF9A",
     color: "#ffffff",
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: "8px",
     fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
+    whiteSpace: "nowrap",
   },
 
   errorMessage: {
-    padding: "13px 15px",
-    marginBottom: "18px",
-    border: "1px solid #efcaca",
+    marginBottom: "20px",
+    padding: "12px 15px",
+    border: "1px solid #f0cece",
     borderRadius: "9px",
     background: "#fff1f1",
-    color: "#aa4141",
+    color: "#a63d3d",
     display: "flex",
     alignItems: "center",
     gap: "8px",
     fontSize: "12px",
   },
 
+  /* =======================================================
+     TARJETAS DE ESTADO
+  ======================================================= */
+
   statusGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: "16px",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: "14px",
     marginBottom: "20px",
   },
 
   statusCard: {
     minHeight: "106px",
+    padding: "18px 20px",
     border: "1px solid",
     borderRadius: "13px",
-    padding: "20px",
     display: "flex",
     alignItems: "center",
-    gap: "16px",
+    gap: "15px",
     textAlign: "left",
     fontFamily: "'Poppins', Arial, sans-serif",
     cursor: "pointer",
   },
 
   statusIcon: {
-    width: "46px",
-    height: "46px",
+    width: "45px",
+    height: "45px",
     borderRadius: "11px",
-    background: "rgba(255,255,255,0.7)",
+    background: "rgba(255,255,255,0.68)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   statusCount: {
+    marginBottom: "1px",
     fontSize: "25px",
+    lineHeight: 1.1,
     fontWeight: 700,
-    lineHeight: 1,
-    marginBottom: "6px",
   },
 
   statusTitle: {
-    color: "#626969",
+    color: "#5c6464",
     fontSize: "12px",
     fontWeight: 500,
   },
 
+  /* =======================================================
+     FILTROS
+  ======================================================= */
+
   filtersCard: {
-    background: "#ffffff",
-    border: "1px solid #e5e9e9",
-    borderRadius: "13px",
-    padding: "20px",
     marginBottom: "20px",
+    padding: "20px",
+    border: "1px solid #e4e9e9",
+    borderRadius: "13px",
+    background: "#ffffff",
   },
 
   searchWrapper: {
+    width: "100%",
     height: "46px",
     boxSizing: "border-box",
-    border: "1px solid #dce1e1",
-    borderRadius: "8px",
-    padding: "0 14px",
     marginBottom: "16px",
+    padding: "0 14px",
+    border: "1px solid #dce1e1",
+    borderRadius: "9px",
+    background: "#ffffff",
+    color: "#899191",
     display: "flex",
     alignItems: "center",
     gap: "10px",
-    color: "#929999",
   },
 
   searchInput: {
     flex: 1,
     height: "100%",
+    padding: 0,
     border: "none",
     outline: "none",
     background: "transparent",
-    color: "#333838",
+    color: "#343a3a",
     fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "12px",
   },
@@ -1513,15 +1753,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   filterField: {
-    minWidth: "140px",
-    flex: "1 1 140px",
+    minWidth: "145px",
+    flex: "1 1 145px",
   },
 
   filterLabel: {
     display: "block",
-    marginBottom: "7px",
-    color: "#777f7f",
-    fontSize: "11px",
+    marginBottom: "6px",
+    color: "#717979",
+    fontSize: "10px",
     fontWeight: 600,
   },
 
@@ -1529,67 +1769,80 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     height: "42px",
     boxSizing: "border-box",
+    padding: "0 10px",
     border: "1px solid #dce1e1",
     borderRadius: "8px",
-    padding: "0 11px",
     background: "#ffffff",
-    color: "#4e5656",
+    color: "#454c4c",
     outlineColor: "#00AF9A",
     fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
+    cursor: "pointer",
   },
 
   clearButton: {
     height: "42px",
-    padding: "0 13px",
-    border: "none",
-    background: "transparent",
-    color: "#00A992",
+    padding: "0 14px",
+    border: "1px solid #dce1e1",
+    borderRadius: "8px",
+    background: "#ffffff",
+    color: "#727a7a",
     fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
-    fontWeight: 600,
+    fontWeight: 500,
     cursor: "pointer",
+    whiteSpace: "nowrap",
   },
 
+  /* =======================================================
+     LISTADO
+  ======================================================= */
+
   listCard: {
+    border: "1px solid #e4e9e9",
+    borderRadius: "14px",
     background: "#ffffff",
-    border: "1px solid #e5e9e9",
-    borderRadius: "13px",
     overflow: "hidden",
   },
 
   listHeader: {
-    padding: "21px 22px",
+    minHeight: "76px",
+    boxSizing: "border-box",
+    padding: "18px 22px",
     borderBottom: "1px solid #edf0f0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 
   listTitle: {
-    margin: "0 0 4px",
-    fontSize: "16px",
+    margin: "0 0 3px",
+    color: "#303535",
+    fontSize: "15px",
     fontWeight: 700,
   },
 
   listSubtitle: {
     margin: 0,
-    color: "#919898",
-    fontSize: "11px",
+    color: "#969d9d",
+    fontSize: "10px",
   },
 
   ticketList: {
-    display: "flex",
-    flexDirection: "column",
+    width: "100%",
   },
 
   ticketRow: {
     minHeight: "118px",
-    padding: "19px 22px",
     boxSizing: "border-box",
+    padding: "20px 22px",
     borderBottom: "1px solid #edf0f0",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: "25px",
+    gap: "24px",
     cursor: "pointer",
+    background: "#ffffff",
   },
 
   ticketMain: {
@@ -1598,10 +1851,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   ticketTopLine: {
+    marginBottom: "5px",
     display: "flex",
     alignItems: "center",
     gap: "10px",
-    marginBottom: "6px",
   },
 
   ticketNumber: {
@@ -1611,15 +1864,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   ticketDate: {
-    color: "#a0a6a6",
+    color: "#a0a7a7",
     fontSize: "10px",
   },
 
   ticketTitle: {
-    margin: "0 0 8px",
+    margin: "0 0 7px",
+    color: "#303535",
     fontSize: "14px",
+    lineHeight: 1.4,
     fontWeight: 600,
-    color: "#292e2e",
   },
 
   ticketMeta: {
@@ -1632,53 +1886,56 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   metaDot: {
-    color: "#c4caca",
+    color: "#c5caca",
   },
 
   ticketActions: {
     display: "flex",
-    alignItems: "flex-end",
-    gap: "13px",
+    alignItems: "center",
+    gap: "12px",
     flexShrink: 0,
   },
 
   actionBlock: {
     display: "flex",
     flexDirection: "column",
-    gap: "7px",
+    gap: "5px",
   },
 
   actionLabel: {
     color: "#969d9d",
-    fontSize: "10px",
+    fontSize: "9px",
+    fontWeight: 500,
   },
 
   priorityBadge: {
-    minWidth: "112px",
+    minWidth: "104px",
     height: "40px",
     boxSizing: "border-box",
+    padding: "0 11px",
     border: "1px solid",
     borderRadius: "8px",
-    padding: "0 11px",
     display: "inline-flex",
     alignItems: "center",
     gap: "7px",
     fontSize: "11px",
     fontWeight: 600,
+    whiteSpace: "nowrap",
   },
 
   statusBadge: {
-    minWidth: "140px",
+    minWidth: "116px",
     height: "40px",
     boxSizing: "border-box",
+    padding: "0 11px",
     border: "1px solid",
     borderRadius: "8px",
-    padding: "0 11px",
     display: "inline-flex",
     alignItems: "center",
     gap: "7px",
     fontSize: "11px",
     fontWeight: 600,
+    whiteSpace: "nowrap",
   },
 
   badgeDot: {
@@ -1689,12 +1946,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   estadoSelect: {
-    minWidth: "140px",
+    minWidth: "128px",
     height: "40px",
     boxSizing: "border-box",
+    padding: "0 9px",
     border: "1px solid",
     borderRadius: "8px",
-    padding: "0 11px",
     outline: "none",
     fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
@@ -1705,46 +1962,56 @@ const styles: Record<string, React.CSSProperties> = {
   openButton: {
     width: "40px",
     height: "40px",
+    padding: 0,
+    marginTop: "17px",
     border: "1px solid #dfe4e4",
     borderRadius: "8px",
     background: "#ffffff",
-    color: "#6d7575",
+    color: "#737b7b",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
   },
 
+  /* =======================================================
+     SIN RESULTADOS
+  ======================================================= */
+
   emptyState: {
     minHeight: "300px",
+    padding: "45px 20px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    padding: "30px",
   },
 
   emptyIcon: {
-    width: "56px",
-    height: "56px",
-    borderRadius: "13px",
+    width: "58px",
+    height: "58px",
+    marginBottom: "15px",
+    borderRadius: "14px",
     background: "#ecf9f7",
     color: "#00AF9A",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: "14px",
   },
 
   emptyTitle: {
-    margin: "0 0 5px",
-    fontSize: "15px",
+    margin: "0 0 6px",
+    color: "#3c4242",
+    fontSize: "16px",
+    fontWeight: 600,
   },
 
   emptyText: {
+    maxWidth: "390px",
     margin: 0,
-    color: "#909797",
-    fontSize: "12px",
+    color: "#8a9191",
+    fontSize: "11px",
+    lineHeight: 1.6,
   },
 };
