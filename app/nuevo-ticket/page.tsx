@@ -21,11 +21,8 @@ type Importancia =
 export default function NuevoTicketPage() {
   const router = useRouter();
 
-  const [loading, setLoading] =
-    useState(true);
-
-  const [guardando, setGuardando] =
-    useState(false);
+  const [loading, setLoading] = useState(true);
+  const [guardando, setGuardando] = useState(false);
 
   const [rol, setRol] =
     useState<Rol | null>(null);
@@ -498,6 +495,8 @@ export default function NuevoTicketPage() {
 
   return (
     <main style={styles.page}>
+      {/* HEADER */}
+
       <header style={styles.header}>
         <div
           style={styles.headerInner}
@@ -532,43 +531,74 @@ export default function NuevoTicketPage() {
           </div>
 
           <div
-            style={styles.userArea}
+            style={
+              styles.headerActions
+            }
           >
-            <div
-              style={styles.userInfo}
-            >
-              <span
-                style={
-                  styles.userEmail
-                }
-              >
-                {userEmail}
-              </span>
+            {/* MANUALES */}
 
-              <span
-                style={styles.role}
-              >
-                {rol === "ADMIN"
-                  ? "ADMINISTRADOR"
-                  : "USUARIO"}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={
-                cerrarSesion
-              }
+            <a
+              href="https://globalcoffeeindustriassa.sharepoint.com/:f:/g/IgAX4zmqxaTCQ6GyOQ9lakgSAeFKPNoWDIPRPPApKvf1Vhs?e=lq5SPl"
+              target="_blank"
+              rel="noopener noreferrer"
               style={
-                styles.logoutButton
+                styles.manualsLink
               }
-              title="Cerrar sesión"
             >
-              <LogoutIcon />
-            </button>
+              <BookIcon />
+
+              <span>Manuales</span>
+
+              <ExternalIcon />
+            </a>
+
+            <div
+              style={
+                styles.headerDivider
+              }
+            />
+
+            <div
+              style={styles.userArea}
+            >
+              <div
+                style={styles.userInfo}
+              >
+                <span
+                  style={
+                    styles.userEmail
+                  }
+                >
+                  {userEmail}
+                </span>
+
+                <span
+                  style={styles.role}
+                >
+                  {rol === "ADMIN"
+                    ? "ADMINISTRADOR"
+                    : "USUARIO"}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  cerrarSesion
+                }
+                style={
+                  styles.logoutButton
+                }
+                title="Cerrar sesión"
+              >
+                <LogoutIcon />
+              </button>
+            </div>
           </div>
         </div>
       </header>
+
+      {/* CONTENIDO */}
 
       <div style={styles.container}>
         <button
@@ -1040,6 +1070,43 @@ function SupportIcon({
   );
 }
 
+function BookIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+    </svg>
+  );
+}
+
+function ExternalIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </svg>
+  );
+}
+
 function UserIcon() {
   return (
     <svg
@@ -1206,18 +1273,20 @@ const styles: Record<
     color: "#7e8787",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    fontSize: "13px",
   },
 
   loadingIcon: {
-    width: "45px",
-    height: "45px",
+    width: "48px",
+    height: "48px",
     background: "#eaf8f6",
-    borderRadius: "11px",
+    borderRadius: "12px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
+
+  /* HEADER: MISMA ESCALA QUE HOME */
 
   header: {
     background: "#ffffff",
@@ -1226,47 +1295,80 @@ const styles: Record<
   },
 
   headerInner: {
-    maxWidth: "1180px",
-    minHeight: "78px",
+    maxWidth: "1320px",
+    minHeight: "86px",
     margin: "0 auto",
-    padding: "0 25px",
+    padding: "0 32px",
     display: "flex",
     alignItems: "center",
     justifyContent:
       "space-between",
+    gap: "25px",
   },
 
   brand: {
     display: "flex",
     alignItems: "center",
-    gap: "13px",
+    gap: "14px",
   },
 
   brandIcon: {
-    width: "44px",
-    height: "44px",
-    borderRadius: "11px",
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
     background: "#00AF9A",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   brandTitle: {
-    fontSize: "17px",
+    fontSize: "19px",
     fontWeight: 700,
   },
 
   brandSubtitle: {
     color: "#899191",
-    fontSize: "10px",
+    fontSize: "12px",
     marginTop: "3px",
+  },
+
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "18px",
+  },
+
+  manualsLink: {
+    height: "40px",
+    padding: "0 14px",
+    border:
+      "1px solid #dfe4e4",
+    borderRadius: "9px",
+    background: "#ffffff",
+    color: "#555d5d",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "12px",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
+
+  headerDivider: {
+    width: "1px",
+    height: "34px",
+    background: "#e7ebeb",
   },
 
   userArea: {
     display: "flex",
     alignItems: "center",
-    gap: "15px",
+    gap: "16px",
   },
 
   userInfo: {
@@ -1277,18 +1379,18 @@ const styles: Record<
   },
 
   userEmail: {
-    fontSize: "11px",
+    fontSize: "13px",
   },
 
   role: {
     color: "#00AF9A",
-    fontSize: "9px",
+    fontSize: "10px",
     fontWeight: 700,
   },
 
   logoutButton: {
-    width: "38px",
-    height: "38px",
+    width: "42px",
+    height: "42px",
     border:
       "1px solid #dfe4e4",
     borderRadius: "9px",
@@ -1300,42 +1402,46 @@ const styles: Record<
     cursor: "pointer",
   },
 
+  /* CONTENIDO */
+
   container: {
-    width: "calc(100% - 48px)",
-    maxWidth: "900px",
+    width: "calc(100% - 56px)",
+    maxWidth: "1000px",
     margin: "0 auto",
-    padding: "32px 0 70px",
+    padding: "38px 0 76px",
   },
 
   backButton: {
     border: "none",
     background: "transparent",
     padding: 0,
-    marginBottom: "23px",
+    marginBottom: "25px",
     color: "#677070",
     display: "flex",
     alignItems: "center",
-    gap: "6px",
+    gap: "7px",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    fontSize: "13px",
+    fontWeight: 500,
     cursor: "pointer",
   },
 
   titleArea: {
-    marginBottom: "25px",
+    marginBottom: "28px",
   },
 
   title: {
     margin: "0 0 6px",
-    fontSize: "26px",
+    fontSize: "28px",
     fontWeight: 700,
   },
 
   subtitle: {
     margin: 0,
     color: "#858d8d",
-    fontSize: "11px",
+    fontSize: "13px",
+    lineHeight: 1.6,
   },
 
   form: {
@@ -1343,29 +1449,31 @@ const styles: Record<
     flexDirection: "column",
   },
 
+  /* CARDS */
+
   card: {
     background: "#ffffff",
     border:
       "1px solid #e5e9e9",
     borderRadius: "14px",
-    padding: "24px",
-    marginBottom: "20px",
+    padding: "28px",
+    marginBottom: "22px",
   },
 
   cardHeading: {
     display: "flex",
     alignItems: "center",
-    gap: "12px",
-    paddingBottom: "18px",
-    marginBottom: "20px",
+    gap: "14px",
+    paddingBottom: "20px",
+    marginBottom: "22px",
     borderBottom:
       "1px solid #edf0f0",
   },
 
   sectionIcon: {
-    width: "40px",
-    height: "40px",
-    borderRadius: "10px",
+    width: "44px",
+    height: "44px",
+    borderRadius: "11px",
     background: "#ecf9f7",
     color: "#00A992",
     display: "flex",
@@ -1375,75 +1483,78 @@ const styles: Record<
   },
 
   cardTitle: {
-    margin: "0 0 3px",
-    fontSize: "14px",
+    margin: "0 0 4px",
+    fontSize: "16px",
     fontWeight: 700,
   },
 
   cardSubtitle: {
     margin: 0,
     color: "#8a9191",
-    fontSize: "10px",
+    fontSize: "12px",
+    lineHeight: 1.5,
   },
 
   twoColumns: {
     display: "grid",
     gridTemplateColumns:
       "repeat(2, minmax(0, 1fr))",
-    gap: "18px",
+    gap: "20px",
   },
 
   formStack: {
     display: "flex",
     flexDirection: "column",
-    gap: "18px",
+    gap: "20px",
   },
 
   fieldLabel: {
     display: "block",
-    marginBottom: "7px",
+    marginBottom: "8px",
     color: "#444a4a",
-    fontSize: "10px",
+    fontSize: "12px",
     fontWeight: 600,
   },
 
   input: {
     width: "100%",
-    height: "42px",
+    height: "46px",
     boxSizing: "border-box",
     border:
       "1px solid #d9dede",
     borderRadius: "8px",
-    padding: "0 12px",
+    padding: "0 13px",
     background: "#ffffff",
     color: "#303535",
     outlineColor: "#00AF9A",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    fontSize: "13px",
   },
 
   textarea: {
     width: "100%",
-    minHeight: "145px",
+    minHeight: "165px",
     boxSizing: "border-box",
     resize: "vertical",
     border:
       "1px solid #d9dede",
     borderRadius: "8px",
-    padding: "12px",
+    padding: "13px",
     background: "#ffffff",
     color: "#303535",
     outlineColor: "#00AF9A",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    fontSize: "13px",
     lineHeight: 1.6,
   },
 
+  /* IMÁGENES */
+
   attachButton: {
-    height: "38px",
-    padding: "0 12px",
+    height: "42px",
+    padding: "0 14px",
     border:
       "1px solid #d7dddd",
     borderRadius: "8px",
@@ -1451,28 +1562,28 @@ const styles: Record<
     color: "#525b5b",
     display: "inline-flex",
     alignItems: "center",
-    gap: "7px",
-    fontSize: "10px",
+    gap: "8px",
+    fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
   },
 
   fileHint: {
-    marginLeft: "10px",
+    marginLeft: "12px",
     color: "#969d9d",
-    fontSize: "8px",
+    fontSize: "10px",
   },
 
   fileList: {
     display: "flex",
     flexDirection: "column",
-    gap: "7px",
-    marginTop: "15px",
+    gap: "8px",
+    marginTop: "17px",
   },
 
   fileItem: {
-    minHeight: "38px",
-    padding: "0 11px",
+    minHeight: "42px",
+    padding: "0 13px",
     border:
       "1px solid #e4e8e8",
     borderRadius: "8px",
@@ -1490,58 +1601,60 @@ const styles: Record<
     alignItems: "center",
     gap: "8px",
     color: "#596161",
-    fontSize: "9px",
+    fontSize: "11px",
   },
 
   removeFile: {
     border: "none",
     background: "transparent",
     color: "#8b9292",
-    fontSize: "18px",
+    fontSize: "20px",
     cursor: "pointer",
   },
+
+  /* ACCIONES */
 
   actions: {
     display: "flex",
     justifyContent: "flex-end",
-    gap: "10px",
+    gap: "12px",
   },
 
   cancelButton: {
-    height: "42px",
-    padding: "0 18px",
+    height: "46px",
+    padding: "0 20px",
     border:
       "1px solid #d9dede",
-    borderRadius: "8px",
+    borderRadius: "9px",
     background: "#ffffff",
     color: "#596161",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
+    fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
   },
 
   submitButton: {
-    height: "42px",
-    padding: "0 18px",
+    height: "46px",
+    padding: "0 20px",
     border: "none",
-    borderRadius: "8px",
+    borderRadius: "9px",
     background: "#00AF9A",
     color: "#ffffff",
     display: "inline-flex",
     alignItems: "center",
-    gap: "7px",
+    gap: "8px",
     fontFamily:
       "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
+    fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
   },
 
   errorMessage: {
-    padding: "12px 14px",
-    marginBottom: "18px",
+    padding: "13px 15px",
+    marginBottom: "20px",
     border:
       "1px solid #efcaca",
     borderRadius: "9px",
@@ -1550,6 +1663,6 @@ const styles: Record<
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    fontSize: "10px",
+    fontSize: "12px",
   },
 };
