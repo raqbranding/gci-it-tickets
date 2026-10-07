@@ -51,11 +51,8 @@ export async function POST(
       autorRol === "ADMIN";
 
     /*
-     * Si escribe ADMIN:
-     * correo al usuario del ticket.
-     *
-     * Si escribe USUARIO:
-     * correo a Helpdesk.
+     * ADMIN -> correo al usuario del ticket.
+     * USUARIO -> correo a Helpdesk.
      */
     const destinatario = esAdmin
       ? email
@@ -92,9 +89,15 @@ export async function POST(
           <html lang="es">
             <head>
               <meta charset="UTF-8" />
+
               <meta
                 name="viewport"
                 content="width=device-width, initial-scale=1.0"
+              />
+
+              <link
+                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+                rel="stylesheet"
               />
             </head>
 
@@ -103,7 +106,7 @@ export async function POST(
                 margin:0;
                 padding:0;
                 background:#f5f7f7;
-                font-family:Arial,Helvetica,sans-serif;
+                font-family:'Poppins',Arial,Helvetica,sans-serif;
                 color:#252a2a;
               "
             >
@@ -115,6 +118,7 @@ export async function POST(
                 style="
                   background:#f5f7f7;
                   padding:40px 15px;
+                  font-family:'Poppins',Arial,Helvetica,sans-serif;
                 "
               >
                 <tr>
@@ -132,6 +136,7 @@ export async function POST(
                         border-radius:14px;
                         overflow:hidden;
                         border:1px solid #e5e9e9;
+                        font-family:'Poppins',Arial,Helvetica,sans-serif;
                       "
                     >
 
@@ -142,6 +147,7 @@ export async function POST(
                           style="
                             background:#00AF9A;
                             padding:24px 30px;
+                            font-family:'Poppins',Arial,Helvetica,sans-serif;
                           "
                         >
                           <table
@@ -159,8 +165,9 @@ export async function POST(
                                   text-align:center;
                                   vertical-align:middle;
                                   color:#00AF9A;
+                                  font-family:'Poppins',Arial,Helvetica,sans-serif;
                                   font-size:20px;
-                                  font-weight:bold;
+                                  font-weight:700;
                                 "
                               >
                                 IT
@@ -169,11 +176,13 @@ export async function POST(
                               <td
                                 style="
                                   padding-left:13px;
+                                  font-family:'Poppins',Arial,Helvetica,sans-serif;
                                 "
                               >
                                 <div
                                   style="
                                     color:#ffffff;
+                                    font-family:'Poppins',Arial,Helvetica,sans-serif;
                                     font-size:18px;
                                     font-weight:700;
                                   "
@@ -184,7 +193,9 @@ export async function POST(
                                 <div
                                   style="
                                     color:#d9fffa;
+                                    font-family:'Poppins',Arial,Helvetica,sans-serif;
                                     font-size:11px;
+                                    font-weight:400;
                                     margin-top:3px;
                                   "
                                 >
@@ -202,12 +213,14 @@ export async function POST(
                         <td
                           style="
                             padding:32px 30px;
+                            font-family:'Poppins',Arial,Helvetica,sans-serif;
                           "
                         >
 
                           <div
                             style="
                               color:#00A992;
+                              font-family:'Poppins',Arial,Helvetica,sans-serif;
                               font-size:11px;
                               font-weight:700;
                               text-transform:uppercase;
@@ -222,8 +235,10 @@ export async function POST(
                             style="
                               margin:0 0 10px;
                               color:#202424;
+                              font-family:'Poppins',Arial,Helvetica,sans-serif;
                               font-size:22px;
                               line-height:1.35;
+                              font-weight:700;
                             "
                           >
                             ${escapeHtml(titulo)}
@@ -233,7 +248,9 @@ export async function POST(
                             style="
                               margin:0 0 25px;
                               color:#7c8585;
+                              font-family:'Poppins',Arial,Helvetica,sans-serif;
                               font-size:13px;
+                              font-weight:400;
                               line-height:1.6;
                             "
                           >
@@ -253,12 +270,14 @@ export async function POST(
                               background:#f7f9f9;
                               border-radius:10px;
                               margin-bottom:24px;
+                              font-family:'Poppins',Arial,Helvetica,sans-serif;
                             "
                           >
                             <tr>
                               <td
                                 style="
                                   padding:18px 20px;
+                                  font-family:'Poppins',Arial,Helvetica,sans-serif;
                                 "
                               >
 
@@ -289,6 +308,7 @@ export async function POST(
 
                           <div
                             style="
+                              font-family:'Poppins',Arial,Helvetica,sans-serif;
                               font-size:11px;
                               font-weight:700;
                               color:#555d5d;
@@ -309,7 +329,9 @@ export async function POST(
                               border:1px solid #edf0f0;
                               border-radius:9px;
                               color:#4f5656;
+                              font-family:'Poppins',Arial,Helvetica,sans-serif;
                               font-size:13px;
+                              font-weight:400;
                               line-height:1.7;
                               white-space:pre-wrap;
                             "
@@ -320,6 +342,7 @@ export async function POST(
                           <!-- BOTÓN -->
 
                           <table
+                            width="100%"
                             cellpadding="0"
                             cellspacing="0"
                             border="0"
@@ -328,26 +351,43 @@ export async function POST(
                             "
                           >
                             <tr>
-                              <td
-                                style="
-                                  background:#00AF9A;
-                                  border-radius:8px;
-                                "
-                              >
-                                <a
-                                  href="${ticketUrl}"
-                                  target="_blank"
-                                  style="
-                                    display:inline-block;
-                                    padding:13px 22px;
-                                    color:#ffffff;
-                                    text-decoration:none;
-                                    font-size:12px;
-                                    font-weight:700;
-                                  "
+                              <td align="left">
+
+                                <table
+                                  cellpadding="0"
+                                  cellspacing="0"
+                                  border="0"
                                 >
-                                  Ver incidencia
-                                </a>
+                                  <tr>
+                                    <td
+                                      bgcolor="#00AF9A"
+                                      style="
+                                        background:#00AF9A;
+                                        border-radius:8px;
+                                        text-align:center;
+                                      "
+                                    >
+                                      <a
+                                        href="${ticketUrl}"
+                                        target="_blank"
+                                        style="
+                                          display:inline-block;
+                                          padding:13px 22px;
+                                          color:#ffffff;
+                                          text-decoration:none;
+                                          font-family:'Poppins',Arial,Helvetica,sans-serif;
+                                          font-size:12px;
+                                          line-height:16px;
+                                          font-weight:600;
+                                          white-space:nowrap;
+                                        "
+                                      >
+                                        Ver incidencia
+                                      </a>
+                                    </td>
+                                  </tr>
+                                </table>
+
                               </td>
                             </tr>
                           </table>
@@ -364,7 +404,9 @@ export async function POST(
                             background:#f8fafa;
                             border-top:1px solid #edf0f0;
                             color:#929999;
+                            font-family:'Poppins',Arial,Helvetica,sans-serif;
                             font-size:10px;
+                            font-weight:400;
                             line-height:1.5;
                           "
                         >
@@ -447,6 +489,7 @@ function filaDato(
       border="0"
       style="
         border-bottom:1px solid #e8ecec;
+        font-family:'Poppins',Arial,Helvetica,sans-serif;
       "
     >
       <tr>
@@ -455,7 +498,9 @@ function filaDato(
             padding:9px 0;
             width:130px;
             color:#8a9292;
+            font-family:'Poppins',Arial,Helvetica,sans-serif;
             font-size:11px;
+            font-weight:400;
             vertical-align:top;
           "
         >
@@ -466,6 +511,7 @@ function filaDato(
           style="
             padding:9px 0;
             color:#303535;
+            font-family:'Poppins',Arial,Helvetica,sans-serif;
             font-size:11px;
             font-weight:600;
             vertical-align:top;
