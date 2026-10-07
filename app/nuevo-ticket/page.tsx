@@ -11,6 +11,7 @@ import { supabase } from "../../lib/supabase";
 import { EMPRESAS } from "../../lib/empresas";
 
 type Rol = "ADMIN" | "USUARIO";
+
 type Importancia =
   | "BAJA"
   | "MEDIA"
@@ -66,6 +67,10 @@ export default function NuevoTicketPage() {
     cargarUsuario();
   }, []);
 
+  /* =========================================================
+     CARGAR USUARIO
+  ========================================================= */
+
   async function cargarUsuario() {
     setLoading(true);
 
@@ -104,6 +109,10 @@ export default function NuevoTicketPage() {
 
     setLoading(false);
   }
+
+  /* =========================================================
+     IMÁGENES
+  ========================================================= */
 
   function seleccionarImagenes(
     event: ChangeEvent<HTMLInputElement>
@@ -171,6 +180,10 @@ export default function NuevoTicketPage() {
     );
   }
 
+  /* =========================================================
+     CREAR TICKET
+  ========================================================= */
+
   async function crearTicket(
     event: FormEvent
   ) {
@@ -218,6 +231,10 @@ export default function NuevoTicketPage() {
     setGuardando(true);
 
     try {
+      /*
+       * 1. CREAR TICKET
+       */
+
       const {
         data: ticketData,
         error: ticketError,
@@ -236,7 +253,7 @@ export default function NuevoTicketPage() {
           importancia,
           estado: "PENDIENTE",
         })
-        .select("id")
+        .select("id, numero")
         .single();
 
       if (ticketError) {
@@ -244,10 +261,11 @@ export default function NuevoTicketPage() {
       }
 
       /*
-       * Si hay imágenes iniciales,
-       * las guardamos como primer
-       * seguimiento del ticket.
+       * 2. SI HAY IMÁGENES INICIALES,
+       * LAS GUARDAMOS COMO PRIMER
+       * SEGUIMIENTO DEL TICKET.
        */
+
       if (
         imagenes.length > 0 &&
         ticketData
@@ -354,6 +372,78 @@ export default function NuevoTicketPage() {
         }
       }
 
+      /*
+       * 3. ENVIAR AVISO A HELPDESK
+       *
+       * El ticket ya está creado en Supabase.
+       * Si el correo falla, NO eliminamos
+       * ni bloqueamos la incidencia.
+       */
+
+      try {
+        const respuestaCorreo =
+          await fetch(
+            "/api/tickets/nueva-incidencia",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                ticketId:
+                  ticketData.id,
+
+                numero:
+                  ticketData.numero,
+
+                nombre:
+                  nombre.trim(),
+
+                empresa,
+
+                email:
+                  email.trim(),
+
+                telefono:
+                  telefono.trim() ||
+                  null,
+
+                titulo:
+                  titulo.trim(),
+
+                descripcion:
+                  descripcion.trim(),
+
+                importancia,
+              }),
+            }
+          );
+
+        if (!respuestaCorreo.ok) {
+          const detalle =
+            await respuestaCorreo
+              .json()
+              .catch(() => null);
+
+          console.error(
+            "El ticket se creó, pero no se pudo enviar el aviso a Helpdesk:",
+            detalle
+          );
+        }
+      } catch (correoError) {
+        console.error(
+          "El ticket se creó, pero falló el aviso por correo a Helpdesk:",
+          correoError
+        );
+      }
+
+      /*
+       * 4. ABRIR TICKET CREADO
+       */
+
       router.push(
         `/tickets/${ticketData.id}`
       );
@@ -373,15 +463,25 @@ export default function NuevoTicketPage() {
     }
   }
 
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
+
   async function cerrarSesion() {
     await supabase.auth.signOut();
     router.replace("/login");
   }
 
+  /* =========================================================
+     LOADING
+  ========================================================= */
+
   if (loading) {
     return (
       <main style={styles.loading}>
-        <div style={styles.loadingIcon}>
+        <div
+          style={styles.loadingIcon}
+        >
           <SupportIcon />
         </div>
 
@@ -391,6 +491,10 @@ export default function NuevoTicketPage() {
       </main>
     );
   }
+
+  /* =========================================================
+     PÁGINA
+  ========================================================= */
 
   return (
     <main style={styles.page}>
@@ -884,6 +988,10 @@ export default function NuevoTicketPage() {
   );
 }
 
+/* =========================================================
+   FIELD
+========================================================= */
+
 function Field({
   label,
   children,
@@ -903,6 +1011,10 @@ function Field({
     </div>
   );
 }
+
+/* =========================================================
+   ICONOS
+========================================================= */
 
 function SupportIcon({
   color = "#00AF9A",
@@ -1043,6 +1155,7 @@ function AlertIcon() {
         cy="12"
         r="9"
       />
+
       <path d="M12 8v5" />
       <path d="M12 16h.01" />
     </svg>
@@ -1065,6 +1178,10 @@ function LogoutIcon() {
     </svg>
   );
 }
+
+/* =========================================================
+   ESTILOS
+========================================================= */
 
 const styles: Record<
   string,
