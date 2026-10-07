@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -422,9 +423,17 @@ export default function TicketPage() {
   async function guardarDatosAdmin() {
     if (!ticket || rol !== "ADMIN") return;
 
+    /*
+     * Detectamos el cambio REAL de estado antes
+     * de modificar el ticket local.
+     */
     const pasaAEnCurso =
       ticket.estado !== "EN_CURSO" &&
       estadoEditado === "EN_CURSO";
+
+    const pasaAResuelto =
+      ticket.estado !== "RESUELTO" &&
+      estadoEditado === "RESUELTO";
 
     const ahora = new Date().toISOString();
 
@@ -515,6 +524,9 @@ export default function TicketPage() {
       }
     }
 
+    /*
+     * Actualizamos primero el estado local.
+     */
     setTicket((actual) =>
       actual
         ? {
@@ -531,12 +543,28 @@ export default function TicketPage() {
     setTagsTicketOriginales([...tagsTicket]);
 
     /*
-     * CORREO AUTOMÁTICO AL PASAR A EN CURSO.
+     * DATOS COMUNES DE LA NOTIFICACIÓN
      *
-     * El estado ya está guardado en Supabase.
-     * Si el correo falla, no deshacemos
-     * el cambio de estado.
+     * Utilizamos los campos editables actuales para
+     * que, si ADMIN corrige el email y cambia el
+     * estado en el mismo guardado, el correo llegue
+     * a la dirección nueva.
      */
+    const datosNotificacion = {
+      numero: ticket.numero,
+      ticketId: ticket.id,
+      titulo: ticket.titulo,
+      nombre: nombre.trim() || ticket.nombre,
+      empresa: empresa || ticket.empresa,
+      email: email.trim() || ticket.email,
+    };
+
+    /*
+     * =============================================
+     * NOTIFICACIÓN: EN CURSO
+     * =============================================
+     */
+
     if (pasaAEnCurso) {
       try {
         const respuestaCorreo =
@@ -548,20 +576,9 @@ export default function TicketPage() {
                 "Content-Type":
                   "application/json",
               },
-              body: JSON.stringify({
-                numero: ticket.numero,
-                ticketId: ticket.id,
-                titulo: ticket.titulo,
-                nombre:
-                  nombre.trim() ||
-                  ticket.nombre,
-                empresa:
-                  empresa ||
-                  ticket.empresa,
-                email:
-                  email.trim() ||
-                  ticket.email,
-              }),
+              body: JSON.stringify(
+                datosNotificacion
+              ),
             }
           );
 
@@ -572,13 +589,55 @@ export default function TicketPage() {
               .catch(() => null);
 
           console.error(
-            "El estado se actualizó, pero no se pudo enviar el correo de incidencia en gestión:",
+            "El ticket pasó a EN CURSO, pero no se pudo enviar el correo:",
             detalle
           );
         }
       } catch (correoError) {
         console.error(
-          "El estado se actualizó, pero falló la notificación de incidencia en gestión:",
+          "El ticket pasó a EN CURSO, pero falló la notificación:",
+          correoError
+        );
+      }
+    }
+
+    /*
+     * =============================================
+     * NOTIFICACIÓN: RESUELTO
+     * =============================================
+     */
+
+    if (pasaAResuelto) {
+      try {
+        const respuestaCorreo =
+          await fetch(
+            "/api/tickets/resuelto",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body: JSON.stringify(
+                datosNotificacion
+              ),
+            }
+          );
+
+        if (!respuestaCorreo.ok) {
+          const detalle =
+            await respuestaCorreo
+              .json()
+              .catch(() => null);
+
+          console.error(
+            "El ticket pasó a RESUELTO, pero no se pudo enviar el correo:",
+            detalle
+          );
+        }
+      } catch (correoError) {
+        console.error(
+          "El ticket pasó a RESUELTO, pero falló la notificación:",
           correoError
         );
       }
@@ -929,9 +988,6 @@ export default function TicketPage() {
      *
      * ADMIN   -> usuario del ticket
      * USUARIO -> Helpdesk
-     *
-     * El fallo del correo no impide que
-     * el seguimiento quede guardado.
      */
     try {
       const respuestaCorreo =
@@ -1391,8 +1447,7 @@ export default function TicketPage() {
                 </div>
               </div>
             </section>
-
-                      <section
+                        <section
               style={styles.card}
             >
               <div
@@ -2078,6 +2133,10 @@ export default function TicketPage() {
                           } catch (
                             err: any
                           ) {
+                            console.error(
+                              err
+                            );
+
                             setError(
                               err?.message ??
                                 "No se ha podido crear el tag."
@@ -2093,22 +2152,16 @@ export default function TicketPage() {
                             nuevoTagNombre.trim()
                               ? 1
                               : 0.5,
+                          cursor:
+                            nuevoTagNombre.trim()
+                              ? "pointer"
+                              : "default",
                         }}
                       >
-                        + Crear y añadir
+                        Crear y añadir
                       </button>
                     </div>
                   </div>
-
-                  <p
-                    style={
-                      styles.editHint
-                    }
-                  >
-                    Los cambios de tags se
-                    aplicarán al pulsar
-                    Guardar cambios.
-                  </p>
                 </>
               )}
             </section>
@@ -2116,44 +2169,27 @@ export default function TicketPage() {
             <section
               style={styles.infoCard}
             >
-              <div
-                style={styles.infoRow}
-              >
-                <span>Creado</span>
+              <InfoRow
+                label="Creado"
+                value={formatearFecha(
+                  ticket.creado_en
+                )}
+              />
 
-                <strong>
-                  {formatearFecha(
-                    ticket.creado_en
-                  )}
-                </strong>
-              </div>
-
-              <div
-                style={styles.infoRow}
-              >
-                <span>
-                  Última actualización
-                </span>
-
-                <strong>
-                  {formatearFecha(
-                    ticket.actualizado_en
-                  )}
-                </strong>
-              </div>
+              <InfoRow
+                label="Actualizado"
+                value={formatearFecha(
+                  ticket.actualizado_en
+                )}
+              />
 
               {ticket.resuelto_en && (
-                <div
-                  style={styles.infoRow}
-                >
-                  <span>Resuelto</span>
-
-                  <strong>
-                    {formatearFecha(
-                      ticket.resuelto_en
-                    )}
-                  </strong>
-                </div>
+                <InfoRow
+                  label="Resuelto"
+                  value={formatearFecha(
+                    ticket.resuelto_en
+                  )}
+                />
               )}
             </section>
           </aside>
@@ -2191,10 +2227,6 @@ export default function TicketPage() {
   );
 }
 
-/* =========================================================
-   COMPONENTES
-========================================================= */
-
 function Header({
   email,
   rol,
@@ -2206,11 +2238,16 @@ function Header({
 }) {
   return (
     <header style={styles.header}>
-      <div style={styles.headerInner}>
+      <div
+        style={styles.headerInner}
+      >
         <div style={styles.brand}>
-          <div style={styles.logoIcon}>
+          <div
+            style={styles.logoIcon}
+          >
             <SupportIcon
               color="#ffffff"
+              size={25}
             />
           </div>
 
@@ -2232,33 +2269,42 @@ function Header({
           </div>
         </div>
 
-        <div style={styles.headerActions}>
+        <div
+          style={styles.headerActions}
+        >
           <a
             href="https://globalcoffeeindustriassa.sharepoint.com/:f:/g/IgAX4zmqxaTCQ6GyOQ9lakgSAeFKPNoWDIPRPPApKvf1Vhs?e=lq5SPl"
             target="_blank"
-            rel="noopener noreferrer"
+            rel="noreferrer"
             style={styles.manualsLink}
           >
             <BookIcon />
-            <span>Manuales</span>
-            <ExternalIcon />
+            Manuales
           </a>
 
           <div
-            style={styles.headerDivider}
+            style={
+              styles.headerDivider
+            }
           />
 
-          <div style={styles.userArea}>
+          <div
+            style={styles.userArea}
+          >
             <div
               style={styles.userInfo}
             >
               <span
-                style={styles.userEmail}
+                style={
+                  styles.userEmail
+                }
               >
                 {email}
               </span>
 
-              <span style={styles.role}>
+              <span
+                style={styles.role}
+              >
                 {rol === "ADMIN"
                   ? "ADMINISTRADOR"
                   : "USUARIO"}
@@ -2266,6 +2312,7 @@ function Header({
             </div>
 
             <button
+              type="button"
               onClick={onLogout}
               style={styles.logout}
               title="Cerrar sesión"
@@ -2288,7 +2335,9 @@ function Field({
 }) {
   return (
     <div>
-      <label style={styles.fieldLabel}>
+      <label
+        style={styles.fieldLabel}
+      >
         {label}
       </label>
 
@@ -2297,69 +2346,27 @@ function Field({
   );
 }
 
-function PriorityBadge({
-  importancia,
+function InfoRow({
+  label,
+  value,
 }: {
-  importancia: Importancia;
+  label: string;
+  value: string;
 }) {
-  const config = {
-    BAJA: {
-      label: "Baja",
-      background: "#eef8f5",
-      color: "#438472",
-      border: "#b9dfd5",
-      dot: "#4cab91",
-    },
-
-    MEDIA: {
-      label: "Media",
-      background: "#fff7e6",
-      color: "#9b711d",
-      border: "#ead49c",
-      dot: "#e7ad2f",
-    },
-
-    ALTA: {
-      label: "Alta",
-      background: "#fff0e9",
-      color: "#b95829",
-      border: "#efc2ab",
-      dot: "#e77a3d",
-    },
-
-    URGENTE: {
-      label: "Urgente",
-      background: "#fff0f0",
-      color: "#bd3e3e",
-      border: "#edb7b7",
-      dot: "#d94b4b",
-    },
-  };
-
-  const current =
-    config[importancia];
-
   return (
-    <span
-      style={{
-        ...styles.badge,
-        background:
-          current.background,
-        color: current.color,
-        borderColor:
-          current.border,
-      }}
-    >
-      <span
-        style={{
-          ...styles.badgeDot,
-          background:
-            current.dot,
-        }}
-      />
+    <div style={styles.infoRow}>
+      <span>{label}</span>
 
-      {current.label}
-    </span>
+      <strong
+        style={{
+          color: "#465050",
+          fontWeight: 600,
+          textAlign: "right",
+        }}
+      >
+        {value}
+      </strong>
+    </div>
   );
 }
 
@@ -2368,85 +2375,98 @@ function StatusBadge({
 }: {
   estado: Estado;
 }) {
-  const config = {
-    PENDIENTE: {
-      label: "Pendiente",
-      background: "#fff8ed",
-      color: "#9b661d",
-      border: "#e8bd72",
-      dot: "#d99525",
-    },
+  const texto =
+    estado === "PENDIENTE"
+      ? "Pendiente"
+      : estado === "EN_CURSO"
+      ? "En curso"
+      : "Resuelto";
 
-    EN_CURSO: {
-      label: "En curso",
-      background: "#edf6ff",
-      color: "#2374c6",
-      border: "#9dcaf3",
-      dot: "#2374c6",
-    },
-
-    RESUELTO: {
-      label: "Resuelto",
-      background: "#edf9f6",
-      color: "#16806c",
-      border: "#9bd7c9",
-      dot: "#00a990",
-    },
-  };
-
-  const current = config[estado];
+  const estilo =
+    getEstadoStyle(estado);
 
   return (
     <span
       style={{
         ...styles.badge,
-        background:
-          current.background,
-        color: current.color,
-        borderColor:
-          current.border,
+        ...estilo,
       }}
     >
       <span
         style={{
           ...styles.badgeDot,
           background:
-            current.dot,
+            estilo.color,
         }}
       />
 
-      {current.label}
+      {texto}
     </span>
   );
 }
 
-/* =========================================================
-   COLORES
-========================================================= */
+function PriorityBadge({
+  importancia,
+}: {
+  importancia: Importancia;
+}) {
+  const texto =
+    importancia === "BAJA"
+      ? "Baja"
+      : importancia === "MEDIA"
+      ? "Media"
+      : importancia === "ALTA"
+      ? "Alta"
+      : "Urgente";
+
+  const estilo =
+    getImportanciaStyle(
+      importancia
+    );
+
+  return (
+    <span
+      style={{
+        ...styles.badge,
+        ...estilo,
+      }}
+    >
+      <span
+        style={{
+          ...styles.badgeDot,
+          background:
+            estilo.color,
+        }}
+      />
+
+      {texto}
+    </span>
+  );
+}
 
 function getEstadoStyle(
   estado: Estado
 ): React.CSSProperties {
   if (estado === "PENDIENTE") {
     return {
-      background: "#fff8ed",
-      borderColor: "#e8bd72",
-      color: "#9b661d",
+      background: "#fff8e8",
+      color: "#a66b00",
+      borderColor: "#f1dfb6",
     };
   }
 
   if (estado === "EN_CURSO") {
     return {
-      background: "#edf6ff",
-      borderColor: "#9dcaf3",
-      color: "#2374c6",
+      background: "#eef6ff",
+      color: "#3776a8",
+      borderColor: "#d4e5f4",
     };
   }
 
   return {
-    background: "#edf9f6",
-    borderColor: "#9bd7c9",
+    background: "#eaf8f4",
     color: "#16806c",
+    borderColor: "#cde9e2",
   };
 }
 
@@ -2455,57 +2475,57 @@ function getImportanciaStyle(
 ): React.CSSProperties {
   if (importancia === "BAJA") {
     return {
-      background: "#eef8f5",
-      borderColor: "#b9dfd5",
-      color: "#438472",
+      background: "#f5f7f7",
+      color: "#758080",
+      borderColor: "#e1e6e6",
     };
   }
 
   if (importancia === "MEDIA") {
     return {
-      background: "#fff7e6",
-      borderColor: "#ead49c",
-      color: "#9b711d",
+      background: "#fff8e8",
+      color: "#a66b00",
+      borderColor: "#f1dfb6",
     };
   }
 
   if (importancia === "ALTA") {
     return {
-      background: "#fff0e9",
-      borderColor: "#efc2ab",
-      color: "#b95829",
+      background: "#fff1e8",
+      color: "#b75c1d",
+      borderColor: "#f1d6c5",
     };
   }
 
   return {
     background: "#fff0f0",
-    borderColor: "#edb7b7",
-    color: "#bd3e3e",
+    color: "#c14545",
+    borderColor: "#efcccc",
   };
 }
 
 function formatearFecha(
   fecha: string
 ) {
-  return new Intl.DateTimeFormat(
-    "es-ES",
-    {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  ).format(new Date(fecha));
+  try {
+    return new Intl.DateTimeFormat(
+      "es-ES",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    ).format(new Date(fecha));
+  } catch {
+    return fecha;
+  }
 }
-
-/* =========================================================
-   ICONOS
-========================================================= */
 
 function SupportIcon({
   color = "currentColor",
-  size = 24,
+  size = 22,
 }: {
   color?: string;
   size?: number;
@@ -2517,14 +2537,114 @@ function SupportIcon({
       viewBox="0 0 24 24"
       fill="none"
       stroke={color}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 13v-2a8 8 0 0 1 16 0v2" />
+      <path d="M4 13a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2v-6H4Z" />
+      <path d="M20 13a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2v-6h2Z" />
+      <path d="M18 19c0 1.1-.9 2-2 2h-3" />
+    </svg>
+  );
+}
+
+function ArrowLeftIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M4 13a8 8 0 0 1 16 0" />
-      <path d="M18 19c0 1.1-.9 2-2 2h-3" />
-      <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
-      <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+function TicketIcon() {
+  return (
+    <svg
+      width="25"
+      height="25"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#00AF9A"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+      <path d="M7 9h10" />
+      <path d="M7 13h7" />
+    </svg>
+  );
+}
+
+function IncidentIcon() {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
+      <path d="M12 8v5" />
+      <path d="M12 16h.01" />
+    </svg>
+  );
+}
+
+function ConversationIcon() {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z" />
+      <path d="M8 9h8" />
+      <path d="M8 13h5" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle
+        cx="12"
+        cy="8"
+        r="4"
+      />
+      <path d="M4 21a8 8 0 0 1 16 0" />
     </svg>
   );
 }
@@ -2537,7 +2657,9 @@ function UserSmallIcon() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
       <circle
         cx="12"
@@ -2549,105 +2671,24 @@ function UserSmallIcon() {
   );
 }
 
-function ArrowLeftIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
-
-function UserIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <circle
-        cx="12"
-        cy="8"
-        r="4"
-      />
-      <path d="M4 21a8 8 0 0 1 16 0" />
-    </svg>
-  );
-}
-
-function IncidentIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
-      <path d="M14 2v6h6" />
-      <path d="M8 13h8" />
-      <path d="M8 17h5" />
-    </svg>
-  );
-}
-
-function ConversationIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" />
-    </svg>
-  );
-}
-
 function TagIcon() {
   return (
     <svg
-      width="20"
-      height="20"
+      width="19"
+      height="19"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
-      <path d="M20 13 11 22l-9-9V4a2 2 0 0 1 2-2h9Z" />
+      <path d="M20 13 11 22l-9-9V4h9l9 9Z" />
       <circle
-        cx="8.5"
-        cy="8.5"
+        cx="7.5"
+        cy="9.5"
         r="1.5"
       />
-    </svg>
-  );
-}
-
-function TicketIcon() {
-  return (
-    <svg
-      width="27"
-      height="27"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#00AF9A"
-      strokeWidth="1.8"
-    >
-      <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
     </svg>
   );
 }
@@ -2660,7 +2701,9 @@ function ImageIcon() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
       <rect
         x="3"
@@ -2687,7 +2730,9 @@ function SaveIcon() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
       <path d="M17 21v-8H7v8" />
@@ -2699,19 +2744,16 @@ function SaveIcon() {
 function CheckIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.2"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-      />
-      <path d="m8 12 2.5 2.5L16 9" />
+      <path d="m5 12 4 4L19 6" />
     </svg>
   );
 }
@@ -2719,12 +2761,14 @@ function CheckIcon() {
 function AlertIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
       <circle
         cx="12"
@@ -2740,12 +2784,12 @@ function AlertIcon() {
 function BookIcon() {
   return (
     <svg
-      width="17"
-      height="17"
+      width="15"
+      height="15"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
@@ -2755,34 +2799,17 @@ function BookIcon() {
   );
 }
 
-function ExternalIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M15 3h6v6" />
-      <path d="M10 14 21 3" />
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-    </svg>
-  );
-}
-
 function LogoutIcon() {
   return (
     <svg
-      width="19"
-      height="19"
+      width="17"
+      height="17"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
       <path d="M10 17l5-5-5-5" />
       <path d="M15 12H3" />
@@ -2790,18 +2817,16 @@ function LogoutIcon() {
     </svg>
   );
 }
-
-/* =========================================================
-   ESTILOS
-========================================================= */
-
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: "100vh",
     background: "#f5f7f7",
-    color: "#202626",
+    color: "#202424",
     fontFamily:
-      "'Poppins', Arial, Helvetica, sans-serif",
+      "'Poppins', Arial, sans-serif",
   },
 
   loading: {
@@ -2809,18 +2834,18 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#f5f7f7",
     display: "flex",
     flexDirection: "column",
+    gap: "14px",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
     fontFamily:
-      "'Poppins', Arial, Helvetica, sans-serif",
+      "'Poppins', Arial, sans-serif",
   },
 
   loadingIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    background: "#e6f7f4",
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
+    background: "#e9f8f5",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -2828,129 +2853,116 @@ const styles: Record<string, React.CSSProperties> = {
 
   loadingText: {
     margin: 0,
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#697474",
+    color: "#7b8282",
+    fontSize: "13px",
   },
 
   header: {
-    width: "100%",
     background: "#ffffff",
-    borderBottom: "1px solid #e5eaea",
+    borderBottom:
+      "1px solid #e8ecec",
   },
 
   headerInner: {
-    width: "100%",
-    maxWidth: 1320,
-    minHeight: 86,
+    maxWidth: "1320px",
+    minHeight: "86px",
     margin: "0 auto",
     padding: "0 32px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    boxSizing: "border-box",
+    justifyContent:
+      "space-between",
   },
 
   brand: {
     display: "flex",
     alignItems: "center",
-    gap: 14,
+    gap: "14px",
   },
 
   logoIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
     background: "#00AF9A",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
   },
 
   brandTitle: {
-    fontSize: 19,
-    lineHeight: 1.2,
+    fontSize: "19px",
     fontWeight: 700,
-    color: "#1f2929",
   },
 
   brandSubtitle: {
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 1.4,
-    fontWeight: 400,
-    color: "#7c8787",
+    marginTop: "3px",
+    color: "#8a9191",
+    fontSize: "12px",
   },
 
   headerActions: {
     display: "flex",
     alignItems: "center",
-    gap: 18,
+    gap: "18px",
   },
 
   manualsLink: {
-    minHeight: 40,
+    height: "40px",
     padding: "0 14px",
-    borderRadius: 9,
-    border: "1px solid #dce5e4",
+    border: "1px solid #dfe4e4",
+    borderRadius: "9px",
     background: "#ffffff",
-    color: "#566161",
+    color: "#555d5d",
     display: "inline-flex",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    fontSize: 12,
-    fontWeight: 600,
+    gap: "8px",
     textDecoration: "none",
-    boxSizing: "border-box",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "12px",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
   },
 
   headerDivider: {
-    width: 1,
-    height: 34,
-    background: "#e3e8e8",
+    width: "1px",
+    height: "34px",
+    background: "#e7ebeb",
   },
 
   userArea: {
     display: "flex",
     alignItems: "center",
-    gap: 16,
+    gap: "16px",
   },
 
   userInfo: {
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-end",
-    gap: 3,
+    gap: "3px",
   },
 
   userEmail: {
-    maxWidth: 260,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    fontSize: 13,
-    lineHeight: 1.4,
+    fontSize: "13px",
     fontWeight: 500,
-    color: "#3b4444",
   },
 
   role: {
-    fontSize: 10,
-    lineHeight: 1.3,
-    fontWeight: 700,
-    letterSpacing: "0.08em",
     color: "#00AF9A",
+    fontSize: "10px",
+    fontWeight: 700,
   },
 
   logout: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    border: "1px solid #dfe5e5",
+    width: "42px",
+    height: "42px",
+    border:
+      "1px solid #dfe4e4",
+    borderRadius: "9px",
     background: "#ffffff",
-    color: "#5e6868",
+    color: "#555d5d",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -2959,200 +2971,145 @@ const styles: Record<string, React.CSSProperties> = {
 
   container: {
     width: "calc(100% - 56px)",
-    maxWidth: 1260,
+    maxWidth: "1260px",
     margin: "0 auto",
-    padding: "30px 0 76px",
-    boxSizing: "border-box",
+    padding: "38px 0 76px",
   },
 
   backButton: {
-    border: 0,
-    background: "transparent",
-    color: "#687272",
     padding: 0,
-    margin: "0 0 22px",
-    display: "inline-flex",
+    marginBottom: "23px",
+    border: "none",
+    background: "transparent",
+    color: "#677070",
+    display: "flex",
     alignItems: "center",
-    gap: 7,
-    fontFamily: "inherit",
-    fontSize: 12,
-    fontWeight: 600,
+    gap: "6px",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "13px",
     cursor: "pointer",
   },
 
   ticketHeader: {
-    minHeight: 112,
-    padding: "22px 24px",
-    marginBottom: 20,
-    borderRadius: 14,
-    border: "1px solid #e0e7e7",
-    background: "#ffffff",
     display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 30,
-    boxSizing: "border-box",
+    alignItems: "flex-end",
+    justifyContent:
+      "space-between",
+    gap: "30px",
+    marginBottom: "24px",
   },
 
   ticketHeaderLeft: {
     minWidth: 0,
-    flex: 1,
   },
 
   ticketNumber: {
-    marginBottom: 7,
-    fontSize: 10,
-    lineHeight: 1.3,
+    color: "#00A992",
+    fontSize: "11px",
     fontWeight: 700,
-    letterSpacing: "0.09em",
-    color: "#00AF9A",
+    letterSpacing: "0.6px",
+    marginBottom: "5px",
   },
 
   pageTitle: {
-    margin: 0,
-    fontSize: 24,
-    lineHeight: 1.3,
+    margin: "0 0 8px",
+    fontSize: "28px",
     fontWeight: 700,
-    color: "#202828",
-    wordBreak: "break-word",
   },
 
   headerMeta: {
-    marginTop: 9,
+    color: "#858d8d",
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
-    gap: 7,
-    fontSize: 11,
-    lineHeight: 1.5,
-    color: "#788282",
+    gap: "7px",
+    fontSize: "12px",
   },
 
   metaDot: {
-    color: "#bcc4c4",
+    color: "#c4caca",
   },
 
   ticketHeaderRight: {
     display: "flex",
     alignItems: "flex-end",
-    gap: 12,
-    flexShrink: 0,
+    gap: "10px",
   },
 
   headerControl: {
     display: "flex",
     flexDirection: "column",
-    gap: 7,
+    gap: "6px",
   },
 
   controlLabel: {
-    fontSize: 10,
-    lineHeight: 1.3,
-    fontWeight: 600,
-    color: "#7a8585",
+    color: "#8e9696",
+    fontSize: "11px",
   },
 
   controlSelect: {
-    minWidth: 135,
-    height: 40,
-    padding: "0 30px 0 11px",
-    borderRadius: 9,
-    border: "1px solid #dfe6e6",
+    minWidth: "140px",
+    height: "40px",
+    border: "1px solid",
+    borderRadius: "8px",
+    padding: "0 10px",
     outline: "none",
-    fontFamily: "inherit",
-    fontSize: 11,
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
-  },
-
-  badge: {
-    minWidth: 112,
-    height: 40,
-    padding: "0 12px",
-    borderRadius: 9,
-    border: "1px solid",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    boxSizing: "border-box",
-    fontSize: 11,
-    fontWeight: 600,
-  },
-
-  badgeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: "50%",
-    flexShrink: 0,
-  },
-
-  errorMessage: {
-    width: "100%",
-    marginBottom: 20,
-    padding: "13px 15px",
-    border: "1px solid #efc1c1",
-    borderRadius: 10,
-    background: "#fff4f4",
-    color: "#b94a4a",
-    display: "flex",
-    alignItems: "center",
-    gap: 9,
-    boxSizing: "border-box",
-    fontSize: 12,
-    lineHeight: 1.5,
   },
 
   layout: {
     display: "grid",
     gridTemplateColumns:
-      "minmax(0, 1fr) 340px",
-    gap: 20,
+      "minmax(0, 1.8fr) minmax(300px, 0.8fr)",
+    gap: "20px",
     alignItems: "start",
   },
 
   mainColumn: {
     minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
   },
 
   sideColumn: {
     minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
   },
 
   card: {
-    padding: 22,
-    borderRadius: 14,
-    border: "1px solid #e0e7e7",
     background: "#ffffff",
-    boxSizing: "border-box",
+    border: "1px solid #e5e9e9",
+    borderRadius: "14px",
+    padding: "26px",
+    marginBottom: "20px",
   },
 
   cardHeading: {
-    marginBottom: 22,
     display: "flex",
     alignItems: "center",
-    gap: 12,
+    gap: "12px",
+    paddingBottom: "18px",
+    marginBottom: "20px",
+    borderBottom: "1px solid #edf0f0",
   },
 
   cardHeadingCompact: {
-    marginBottom: 20,
     display: "flex",
     alignItems: "center",
-    gap: 12,
+    gap: "11px",
+    paddingBottom: "17px",
+    marginBottom: "18px",
+    borderBottom: "1px solid #edf0f0",
   },
 
   sectionIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    background: "#e8f8f5",
-    color: "#00AF9A",
+    width: "44px",
+    height: "44px",
+    borderRadius: "10px",
+    background: "#ecf9f7",
+    color: "#00A992",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -3160,117 +3117,131 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   cardTitle: {
-    margin: 0,
-    fontSize: 15,
-    lineHeight: 1.35,
+    margin: "0 0 3px",
+    fontSize: "16px",
     fontWeight: 700,
-    color: "#252d2d",
   },
 
   cardSubtitle: {
-    margin: "4px 0 0",
-    fontSize: 11,
-    lineHeight: 1.45,
-    color: "#879090",
+    margin: 0,
+    color: "#8a9191",
+    fontSize: "12px",
   },
 
   readOnlyField: {
-    marginBottom: 18,
+    marginBottom: "20px",
   },
 
   fieldLabel: {
     display: "block",
-    marginBottom: 7,
-    fontSize: 11,
-    lineHeight: 1.4,
+    marginBottom: "8px",
+    color: "#444a4a",
+    fontSize: "12px",
     fontWeight: 600,
-    color: "#5c6767",
   },
 
   readOnlyValue: {
-    minHeight: 42,
-    padding: "11px 13px",
-    borderRadius: 9,
-    border: "1px solid #e3e8e8",
-    background: "#f8fafa",
-    color: "#303939",
-    fontSize: 12,
-    lineHeight: 1.55,
-    boxSizing: "border-box",
+    color: "#303535",
+    fontSize: "14px",
+    fontWeight: 500,
   },
 
   descriptionBox: {
-    minHeight: 120,
-    padding: "14px 15px",
-    borderRadius: 9,
-    border: "1px solid #e3e8e8",
     background: "#f8fafa",
-    color: "#394242",
-    fontSize: 12,
+    border: "1px solid #edf0f0",
+    borderRadius: "9px",
+    padding: "15px",
+    color: "#4f5656",
+    fontSize: "13px",
     lineHeight: 1.7,
     whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-    boxSizing: "border-box",
   },
 
   formStack: {
     display: "flex",
     flexDirection: "column",
-    gap: 15,
+    gap: "15px",
   },
 
   input: {
     width: "100%",
-    height: 42,
-    padding: "0 11px",
-    borderRadius: 9,
-    border: "1px solid #dce4e4",
-    background: "#ffffff",
-    color: "#303939",
-    outline: "none",
-    fontFamily: "inherit",
-    fontSize: 11,
+    height: "44px",
     boxSizing: "border-box",
+    border: "1px solid #d9dede",
+    borderRadius: "8px",
+    padding: "0 11px",
+    background: "#ffffff",
+    color: "#303535",
+    outlineColor: "#00AF9A",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "12px",
   },
 
   editHint: {
-    margin: "2px 0 0",
-    fontSize: 10,
-    lineHeight: 1.6,
-    color: "#929b9b",
+    margin: "2px 0 0 0",
+    color: "#939a9a",
+    fontSize: "10px",
+    lineHeight: 1.5,
+  },
+
+  badge: {
+    minWidth: "118px",
+    height: "40px",
+    boxSizing: "border-box",
+    border: "1px solid",
+    borderRadius: "8px",
+    padding: "0 11px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    fontSize: "11px",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
+
+  badgeDot: {
+    width: "6px",
+    height: "6px",
+    borderRadius: "50%",
+  },
+
+  errorMessage: {
+    borderRadius: "9px",
+    padding: "11px 14px",
+    marginBottom: "20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    background: "#fff1f1",
+    border: "1px solid #f0cece",
+    color: "#a63d3d",
+    fontSize: "12px",
   },
 
   noFollowUps: {
-    minHeight: 92,
-    padding: "20px",
-    borderRadius: 10,
-    background: "#f8fafa",
-    border: "1px dashed #dce4e4",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    padding: "25px 0 30px",
+    color: "#929999",
+    fontSize: "12px",
     textAlign: "center",
-    color: "#8b9494",
-    fontSize: 11,
   },
 
   timeline: {
-    position: "relative",
     display: "flex",
     flexDirection: "column",
-    gap: 18,
-    marginBottom: 24,
+    gap: "20px",
+    marginBottom: "25px",
   },
 
   timelineItem: {
     display: "flex",
     alignItems: "flex-start",
-    gap: 12,
+    gap: "11px",
   },
 
   timelineAvatar: {
-    width: 34,
-    height: 34,
+    width: "34px",
+    height: "34px",
     borderRadius: "50%",
     display: "flex",
     alignItems: "center",
@@ -3284,401 +3255,351 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   timelineAvatarUser: {
-    background: "#eef2f2",
-    color: "#6d7777",
-    border: "1px solid #dce3e3",
+    background: "#edf1f1",
+    color: "#687171",
   },
 
   timelineContent: {
     flex: 1,
     minWidth: 0,
-    padding: "12px 14px",
-    borderRadius: 10,
-    border: "1px solid #e2e8e8",
-    background: "#fafcfc",
   },
 
   timelineHeader: {
-    marginBottom: 7,
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    gap: "15px",
+    marginBottom: "5px",
   },
 
   timelineAuthor: {
-    fontSize: 11,
-    lineHeight: 1.4,
-    color: "#384141",
+    fontSize: "12px",
   },
 
   timelineDate: {
-    flexShrink: 0,
-    fontSize: 9,
-    lineHeight: 1.4,
-    color: "#969f9f",
+    color: "#9aa1a1",
+    fontSize: "10px",
   },
 
   timelineMessage: {
-    color: "#4a5454",
-    fontSize: 11,
-    lineHeight: 1.65,
+    background: "#f7f9f9",
+    borderRadius: "8px",
+    padding: "11px 13px",
+    color: "#4d5454",
+    fontSize: "12px",
+    lineHeight: 1.6,
     whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
   },
 
   followUpImages: {
-    marginTop: 10,
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fill, minmax(115px, 1fr))",
-    gap: 8,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginTop: "9px",
   },
 
   followUpImageButton: {
-    width: "100%",
-    height: 100,
+    width: "110px",
+    height: "82px",
     padding: 0,
-    border: "1px solid #dce4e4",
-    borderRadius: 8,
-    background: "#ffffff",
     overflow: "hidden",
+    border: "1px solid #e1e6e6",
+    borderRadius: "8px",
+    background: "#f5f7f7",
     cursor: "pointer",
   },
 
   followUpImage: {
     width: "100%",
     height: "100%",
-    display: "block",
     objectFit: "cover",
+    display: "block",
   },
 
   followUpComposer: {
-    paddingTop: 22,
-    borderTop: "1px solid #e7ebeb",
+    paddingTop: "20px",
+    borderTop: "1px solid #edf0f0",
   },
 
   textarea: {
     width: "100%",
-    minHeight: 115,
+    minHeight: "105px",
     resize: "vertical",
-    padding: "12px 13px",
-    borderRadius: 9,
-    border: "1px solid #dce4e4",
-    background: "#ffffff",
-    color: "#303939",
-    outline: "none",
-    fontFamily: "inherit",
-    fontSize: 11,
-    lineHeight: 1.6,
     boxSizing: "border-box",
+    border: "1px solid #d9dede",
+    borderRadius: "8px",
+    padding: "12px",
+    outlineColor: "#00AF9A",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "12px",
+    lineHeight: 1.6,
   },
 
   previewGrid: {
-    marginTop: 12,
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fill, minmax(100px, 1fr))",
-    gap: 9,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginTop: "10px",
   },
 
   previewItem: {
+    width: "90px",
+    height: "70px",
     position: "relative",
-    height: 90,
-    borderRadius: 8,
+    borderRadius: "8px",
     overflow: "hidden",
-    border: "1px solid #dce4e4",
-    background: "#f5f7f7",
+    border: "1px solid #e1e6e6",
   },
 
   previewImage: {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    display: "block",
   },
 
   removeImage: {
     position: "absolute",
-    top: 5,
-    right: 5,
-    width: 23,
-    height: 23,
+    top: "4px",
+    right: "4px",
+    width: "21px",
+    height: "21px",
     padding: 0,
-    border: 0,
+    border: "none",
     borderRadius: "50%",
-    background: "rgba(31,39,39,.82)",
+    background: "rgba(0,0,0,0.65)",
     color: "#ffffff",
-    fontFamily: "Arial, sans-serif",
-    fontSize: 16,
-    lineHeight: "23px",
-    textAlign: "center",
     cursor: "pointer",
   },
 
   composerFooter: {
-    marginTop: 12,
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
-    gap: 16,
+    alignItems: "center",
+    gap: "15px",
+    marginTop: "11px",
   },
 
   composerLeft: {
     display: "flex",
     alignItems: "center",
+    gap: "10px",
     flexWrap: "wrap",
-    gap: 10,
   },
 
   attachButton: {
-    minHeight: 38,
-    padding: "0 12px",
-    borderRadius: 8,
-    border: "1px solid #dce4e4",
+    height: "40px",
+    padding: "0 13px",
+    border: "1px solid #d7dddd",
+    borderRadius: "8px",
     background: "#ffffff",
-    color: "#596363",
+    color: "#566060",
     display: "inline-flex",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    boxSizing: "border-box",
-    fontSize: 10,
+    gap: "7px",
+    fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
   },
 
   composerHint: {
-    fontSize: 9,
-    lineHeight: 1.4,
-    color: "#9aa2a2",
+    color: "#969d9d",
+    fontSize: "10px",
   },
 
   saveRight: {
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: 12,
-  },
-
-  savedMessage: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    color: "#16806c",
-    fontSize: 10,
-    fontWeight: 600,
-    whiteSpace: "nowrap",
+    gap: "11px",
+    flexWrap: "wrap",
   },
 
   saveButton: {
-    minHeight: 42,
-    padding: "0 16px",
-    border: 0,
-    borderRadius: 9,
+    height: "44px",
+    padding: "0 17px",
+    border: "none",
+    borderRadius: "8px",
     background: "#00AF9A",
     color: "#ffffff",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    fontFamily: "inherit",
-    fontSize: 11,
+    gap: "7px",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
     fontWeight: 600,
-    boxSizing: "border-box",
+  },
+
+  savedMessage: {
+    color: "#13806c",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "11px",
+    fontWeight: 600,
   },
 
   tagsContainer: {
     display: "flex",
     flexWrap: "wrap",
-    gap: 7,
+    gap: "7px",
   },
 
   tag: {
-    minHeight: 30,
-    padding: "0 9px",
-    borderRadius: 7,
+    minHeight: "28px",
+    boxSizing: "border-box",
     border: "1px solid",
-    background: "#ffffff",
+    borderRadius: "20px",
+    padding: "0 9px",
     display: "inline-flex",
     alignItems: "center",
-    gap: 6,
-    boxSizing: "border-box",
-    fontSize: 9,
-    lineHeight: 1.3,
-    fontWeight: 700,
-    letterSpacing: "0.02em",
+    gap: "6px",
+    fontSize: "10px",
+    fontWeight: 600,
   },
 
   tagDot: {
-    width: 6,
-    height: 6,
+    width: "6px",
+    height: "6px",
     borderRadius: "50%",
-    flexShrink: 0,
   },
 
   removeTag: {
-    width: 17,
-    height: 17,
-    marginLeft: 2,
     padding: 0,
-    border: 0,
-    borderRadius: "50%",
+    marginLeft: "2px",
+    border: "none",
     background: "transparent",
     color: "currentColor",
-    fontFamily: "Arial, sans-serif",
-    fontSize: 14,
-    lineHeight: "17px",
+    fontSize: "14px",
     cursor: "pointer",
   },
 
   noTags: {
     margin: 0,
-    fontSize: 11,
-    lineHeight: 1.5,
-    color: "#909999",
+    color: "#929999",
+    fontSize: "11px",
   },
 
   tagDivider: {
-    width: "100%",
-    height: 1,
+    height: "1px",
+    background: "#edf0f0",
     margin: "18px 0",
-    background: "#e8ecec",
   },
 
   newTagArea: {
-    marginTop: 15,
+    marginTop: "18px",
   },
 
   colorRow: {
-    marginTop: 9,
-    display: "flex",
-    alignItems: "center",
-    gap: 9,
+    display: "grid",
+    gridTemplateColumns: "46px 1fr",
+    gap: "8px",
+    marginTop: "8px",
   },
 
   colorInput: {
-    width: 42,
-    height: 38,
-    padding: 3,
-    border: "1px solid #dce4e4",
-    borderRadius: 8,
+    width: "46px",
+    height: "38px",
+    padding: "3px",
+    border: "1px solid #d9dede",
+    borderRadius: "8px",
     background: "#ffffff",
     cursor: "pointer",
-    boxSizing: "border-box",
   },
 
   createTagButton: {
-    flex: 1,
-    minHeight: 38,
-    padding: "0 11px",
-    borderRadius: 8,
-    border: "1px solid #cfe4e0",
-    background: "#eff9f7",
-    color: "#008c7b",
-    fontFamily: "inherit",
-    fontSize: 10,
+    height: "38px",
+    border: "1px solid #00AF9A",
+    borderRadius: "8px",
+    background: "#ffffff",
+    color: "#008f7e",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
   },
 
   infoCard: {
-    padding: "8px 18px",
-    borderRadius: 14,
-    border: "1px solid #e0e7e7",
     background: "#ffffff",
-    boxSizing: "border-box",
+    border: "1px solid #e5e9e9",
+    borderRadius: "14px",
+    padding: "18px 20px",
   },
 
   infoRow: {
-    minHeight: 48,
-    borderBottom: "1px solid #edf0f0",
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
-    fontSize: 10,
-    lineHeight: 1.4,
-    color: "#858e8e",
+    gap: "15px",
+    padding: "9px 0",
+    borderBottom: "1px solid #f0f2f2",
+    color: "#858d8d",
+    fontSize: "10px",
   },
 
   imageModal: {
     position: "fixed",
     inset: 0,
     zIndex: 9999,
-    padding: 35,
-    background: "rgba(20,26,26,.88)",
+    background: "rgba(16,20,20,0.82)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxSizing: "border-box",
+    padding: "40px",
   },
 
   modalImage: {
     maxWidth: "92vw",
     maxHeight: "88vh",
     objectFit: "contain",
-    borderRadius: 8,
-    boxShadow:
-      "0 18px 60px rgba(0,0,0,.35)",
+    borderRadius: "10px",
+    background: "#ffffff",
   },
 
   modalClose: {
     position: "fixed",
-    top: 22,
-    right: 26,
-    width: 42,
-    height: 42,
-    padding: 0,
-    border: "1px solid rgba(255,255,255,.25)",
+    top: "22px",
+    right: "28px",
+    width: "38px",
+    height: "38px",
+    border:
+      "1px solid rgba(255,255,255,0.3)",
     borderRadius: "50%",
-    background: "rgba(255,255,255,.1)",
+    background: "rgba(0,0,0,0.25)",
     color: "#ffffff",
-    fontFamily: "Arial, sans-serif",
-    fontSize: 27,
-    lineHeight: "40px",
-    textAlign: "center",
+    fontSize: "24px",
     cursor: "pointer",
   },
 
   notFound: {
-    minHeight: 340,
-    padding: 30,
-    borderRadius: 14,
-    border: "1px solid #e0e7e7",
-    background: "#ffffff",
+    minHeight: "400px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    boxSizing: "border-box",
   },
 
   notFoundIcon: {
-    width: 58,
-    height: 58,
-    marginBottom: 15,
-    borderRadius: 15,
-    background: "#e8f8f5",
+    width: "58px",
+    height: "58px",
+    borderRadius: "14px",
+    background: "#ecf9f7",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: "15px",
   },
 
   notFoundTitle: {
-    margin: 0,
-    fontSize: 16,
-    lineHeight: 1.4,
-    fontWeight: 700,
-    color: "#303838",
+    margin: "0 0 7px",
+    fontSize: "18px",
   },
 
   notFoundText: {
-    maxWidth: 420,
-    margin: "7px 0 0",
-    fontSize: 11,
-    lineHeight: 1.6,
-    color: "#858e8e",
+    margin: 0,
+    color: "#8a9191",
+    fontSize: "12px",
   },
 };
