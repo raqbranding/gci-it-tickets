@@ -538,7 +538,7 @@ export default function NuevoTicketPage() {
             {/* MANUALES */}
 
             <a
-              href="https://globalcoffeeindustriassa.sharepoint.com/:f:/g/IgAX4zmqxaTCQ6GyOQ9lakgSAeFKPNoWDIPRPPApKvf1Vhs?e=lq5SPl"
+              href="https://globalcoffeeindustriessa.sharepoint.com/:f:/g/IgA447pIqi_SS6x5Y93RoN-zAdpOXBO2D8nSx3Fw6f9QlDY?e=F3ERNs"
               target="_blank"
               rel="noopener noreferrer"
               style={
