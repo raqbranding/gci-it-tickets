@@ -1,13 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { EMPRESAS } from "../lib/empresas";
 
 type Rol = "ADMIN" | "USUARIO";
-type Estado = "PENDIENTE" | "EN_CURSO" | "RESUELTO";
-type EstadoFiltro = "TODOS" | Estado;
-type Importancia = "BAJA" | "MEDIA" | "ALTA" | "URGENTE";
+
+type Estado =
+  | "PENDIENTE"
+  | "EN_CURSO"
+  | "RESUELTO";
+
+type EstadoFiltro =
+  | "TODOS"
+  | Estado;
+
+type Importancia =
+  | "BAJA"
+  | "MEDIA"
+  | "ALTA"
+  | "URGENTE";
 
 type Ticket = {
   id: string;
@@ -28,20 +45,48 @@ type Ticket = {
   resuelto_por: string | null;
 };
 
-export default function Home() {
+export default function HomePage() {
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [rol, setRol] = useState<Rol | null>(null);
-  const [email, setEmail] = useState("");
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [errorCarga, setErrorCarga] = useState("");
+  const [loading, setLoading] =
+    useState(true);
 
-  const [busqueda, setBusqueda] = useState("");
-  const [fecha, setFecha] = useState("TODAS");
-  const [importancia, setImportancia] = useState("TODAS");
-  const [estado, setEstado] = useState<EstadoFiltro>("TODOS");
-  const [orden, setOrden] = useState("RECIENTES");
+  const [rol, setRol] =
+    useState<Rol | null>(null);
+
+  const [email, setEmail] =
+    useState("");
+
+  const [tickets, setTickets] =
+    useState<Ticket[]>([]);
+
+  const [errorCarga, setErrorCarga] =
+    useState("");
+
+  const [busqueda, setBusqueda] =
+    useState("");
+
+  const [fecha, setFecha] =
+    useState("TODAS");
+
+  const [empresa, setEmpresa] =
+    useState("TODAS");
+
+  const [importancia, setImportancia] =
+    useState("TODAS");
+
+  const [estado, setEstado] =
+    useState<EstadoFiltro>("TODOS");
+
+  const [orden, setOrden] =
+    useState("RECIENTES");
+
+  const [actualizandoId, setActualizandoId] =
+    useState<string | null>(null);
+
+  /* =========================================================
+     CARGA
+  ========================================================= */
 
   useEffect(() => {
     cargarDatos();
@@ -60,52 +105,60 @@ export default function Home() {
       return;
     }
 
-    const { data: acceso, error: errorAcceso } = await supabase
+    const {
+      data: acceso,
+      error: accesoError,
+    } = await supabase
       .from("it_usuarios")
       .select("rol, activo")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (errorAcceso || !acceso || !acceso.activo) {
+    if (
+      accesoError ||
+      !acceso ||
+      !acceso.activo
+    ) {
       await supabase.auth.signOut();
       router.replace("/login");
       return;
     }
 
-    const rolUsuario = acceso.rol as Rol;
+    const rolActual =
+      acceso.rol as Rol;
 
+    setRol(rolActual);
     setEmail(user.email ?? "");
-    setRol(rolUsuario);
 
-    const { data: ticketsData, error: ticketsError } =
-      await supabase
-        .from("it_tickets")
-        .select(
-          `
-            id,
-            numero,
-            creado_por,
-            nombre,
-            telefono,
-            email,
-            empresa,
-            titulo,
-            descripcion,
-            importancia,
-            estado,
-            asignado_a,
-            creado_en,
-            actualizado_en,
-            resuelto_en,
-            resuelto_por
-          `
-        )
-        .order("creado_en", {
-          ascending: false,
-        });
+    const {
+      data: ticketsData,
+      error: ticketsError,
+    } = await supabase
+      .from("it_tickets")
+      .select(`
+        id,
+        numero,
+        creado_por,
+        nombre,
+        telefono,
+        email,
+        empresa,
+        titulo,
+        descripcion,
+        importancia,
+        estado,
+        asignado_a,
+        creado_en,
+        actualizado_en,
+        resuelto_en,
+        resuelto_por
+      `)
+      .order("creado_en", {
+        ascending: false,
+      });
 
     if (ticketsError) {
-      console.error("Error cargando tickets:", ticketsError);
+      console.error(ticketsError);
 
       setErrorCarga(
         `No se han podido cargar los tickets: ${ticketsError.message}`
@@ -116,20 +169,183 @@ export default function Home() {
       return;
     }
 
-    setTickets((ticketsData ?? []) as Ticket[]);
+    setTickets(
+      (ticketsData ?? []) as Ticket[]
+    );
+
     setLoading(false);
   }
 
-  async function cerrarSesion() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
+  /* =========================================================
+     CONTADORES
+  ========================================================= */
 
-  function seleccionarEstado(nuevoEstado: Estado) {
-    setEstado((actual) =>
-      actual === nuevoEstado ? "TODOS" : nuevoEstado
-    );
-  }
+  const pendientes = useMemo(
+    () =>
+      tickets.filter(
+        (ticket) =>
+          ticket.estado === "PENDIENTE"
+      ).length,
+    [tickets]
+  );
+
+  const enCurso = useMemo(
+    () =>
+      tickets.filter(
+        (ticket) =>
+          ticket.estado === "EN_CURSO"
+      ).length,
+    [tickets]
+  );
+
+  const resueltos = useMemo(
+    () =>
+      tickets.filter(
+        (ticket) =>
+          ticket.estado === "RESUELTO"
+      ).length,
+    [tickets]
+  );
+
+  /* =========================================================
+     FILTROS
+  ========================================================= */
+
+  const ticketsFiltrados =
+    useMemo(() => {
+      let resultado = [...tickets];
+
+      if (estado !== "TODOS") {
+        resultado =
+          resultado.filter(
+            (ticket) =>
+              ticket.estado === estado
+          );
+      }
+
+      if (fecha !== "TODAS") {
+        const ahora = new Date();
+
+        let limite = new Date();
+
+        if (fecha === "HOY") {
+          limite = new Date(
+            ahora.getFullYear(),
+            ahora.getMonth(),
+            ahora.getDate()
+          );
+        }
+
+        if (fecha === "7_DIAS") {
+          limite.setDate(
+            ahora.getDate() - 7
+          );
+        }
+
+        if (fecha === "30_DIAS") {
+          limite.setDate(
+            ahora.getDate() - 30
+          );
+        }
+
+        resultado =
+          resultado.filter(
+            (ticket) =>
+              new Date(
+                ticket.creado_en
+              ) >= limite
+          );
+      }
+
+      /*
+       * ADMIN:
+       * búsqueda + empresa + importancia
+       */
+      if (rol === "ADMIN") {
+        const texto =
+          busqueda
+            .trim()
+            .toLowerCase();
+
+        if (texto) {
+          resultado =
+            resultado.filter(
+              (ticket) =>
+                ticket.nombre
+                  ?.toLowerCase()
+                  .includes(texto) ||
+                ticket.empresa
+                  ?.toLowerCase()
+                  .includes(texto) ||
+                ticket.titulo
+                  ?.toLowerCase()
+                  .includes(texto) ||
+                ticket.email
+                  ?.toLowerCase()
+                  .includes(texto) ||
+                String(
+                  ticket.numero ?? ""
+                ).includes(texto)
+            );
+        }
+
+        if (empresa !== "TODAS") {
+          resultado =
+            resultado.filter(
+              (ticket) =>
+                ticket.empresa ===
+                empresa
+            );
+        }
+
+        if (
+          importancia !== "TODAS"
+        ) {
+          resultado =
+            resultado.filter(
+              (ticket) =>
+                ticket.importancia ===
+                importancia
+            );
+        }
+      }
+
+      resultado.sort((a, b) => {
+        const fechaA =
+          new Date(
+            a.creado_en
+          ).getTime();
+
+        const fechaB =
+          new Date(
+            b.creado_en
+          ).getTime();
+
+        if (
+          rol === "ADMIN" &&
+          orden === "ANTIGUOS"
+        ) {
+          return fechaA - fechaB;
+        }
+
+        return fechaB - fechaA;
+      });
+
+      return resultado;
+    }, [
+      tickets,
+      rol,
+      estado,
+      fecha,
+      empresa,
+      importancia,
+      busqueda,
+      orden,
+    ]);
+
+  /* =========================================================
+     CAMBIAR ESTADO
+  ========================================================= */
 
   async function cambiarEstadoTicket(
     ticketId: string,
@@ -138,6 +354,9 @@ export default function Home() {
     if (rol !== "ADMIN") {
       return;
     }
+
+    setActualizandoId(ticketId);
+    setErrorCarga("");
 
     const {
       data: { user },
@@ -148,7 +367,8 @@ export default function Home() {
       return;
     }
 
-    const ahora = new Date().toISOString();
+    const ahora =
+      new Date().toISOString();
 
     const cambios =
       nuevoEstado === "RESUELTO"
@@ -165,453 +385,606 @@ export default function Home() {
             resuelto_por: null,
           };
 
-    const { error } = await supabase
-      .from("it_tickets")
-      .update(cambios)
-      .eq("id", ticketId);
+    const { error } =
+      await supabase
+        .from("it_tickets")
+        .update(cambios)
+        .eq("id", ticketId);
 
     if (error) {
-      console.error("Error cambiando estado:", error);
+      console.error(error);
 
       setErrorCarga(
-        `No se ha podido cambiar el estado: ${error.message}`
+        `No se ha podido actualizar el estado: ${error.message}`
       );
 
+      setActualizandoId(null);
       return;
     }
-
-    setErrorCarga("");
 
     setTickets((actuales) =>
       actuales.map((ticket) =>
         ticket.id === ticketId
           ? {
               ...ticket,
-              estado: nuevoEstado,
-              actualizado_en: cambios.actualizado_en,
-              resuelto_en: cambios.resuelto_en,
-              resuelto_por: cambios.resuelto_por,
+              ...cambios,
             }
           : ticket
       )
     );
+
+    setActualizandoId(null);
   }
 
   /* =========================================================
-     CONTADORES
+     LIMPIAR FILTROS
   ========================================================= */
-
-  const pendientes = tickets.filter(
-    (ticket) => ticket.estado === "PENDIENTE"
-  ).length;
-
-  const enCurso = tickets.filter(
-    (ticket) => ticket.estado === "EN_CURSO"
-  ).length;
-
-  const resueltos = tickets.filter(
-    (ticket) => ticket.estado === "RESUELTO"
-  ).length;
-
-  /* =========================================================
-     FILTRADO
-  ========================================================= */
-
-  const ticketsFiltrados = useMemo(() => {
-    let resultado = [...tickets];
-
-    // ESTADO - TODOS
-    if (estado !== "TODOS") {
-      resultado = resultado.filter(
-        (ticket) => ticket.estado === estado
-      );
-    }
-
-    // FECHA - TODOS
-    if (fecha !== "TODAS") {
-      const ahora = new Date();
-
-      if (fecha === "HOY") {
-        resultado = resultado.filter((ticket) => {
-          const fechaTicket = new Date(ticket.creado_en);
-
-          return (
-            fechaTicket.getDate() === ahora.getDate() &&
-            fechaTicket.getMonth() === ahora.getMonth() &&
-            fechaTicket.getFullYear() === ahora.getFullYear()
-          );
-        });
-      }
-
-      if (fecha === "7_DIAS") {
-        const limite = new Date();
-        limite.setDate(limite.getDate() - 7);
-
-        resultado = resultado.filter(
-          (ticket) => new Date(ticket.creado_en) >= limite
-        );
-      }
-
-      if (fecha === "30_DIAS") {
-        const limite = new Date();
-        limite.setDate(limite.getDate() - 30);
-
-        resultado = resultado.filter(
-          (ticket) => new Date(ticket.creado_en) >= limite
-        );
-      }
-    }
-
-    // FILTROS EXCLUSIVOS DE ADMIN
-    if (rol === "ADMIN") {
-      const texto = busqueda.trim().toLowerCase();
-
-      if (texto) {
-        resultado = resultado.filter(
-          (ticket) =>
-            ticket.nombre?.toLowerCase().includes(texto) ||
-            ticket.empresa?.toLowerCase().includes(texto) ||
-            ticket.titulo?.toLowerCase().includes(texto) ||
-            ticket.email?.toLowerCase().includes(texto) ||
-            String(ticket.numero ?? "").includes(texto)
-        );
-      }
-
-      if (importancia !== "TODAS") {
-        resultado = resultado.filter(
-          (ticket) => ticket.importancia === importancia
-        );
-      }
-
-      resultado.sort((a, b) => {
-        const fechaA = new Date(a.creado_en).getTime();
-        const fechaB = new Date(b.creado_en).getTime();
-
-        if (orden === "ANTIGUOS") {
-          return fechaA - fechaB;
-        }
-
-        return fechaB - fechaA;
-      });
-    } else {
-      resultado.sort(
-        (a, b) =>
-          new Date(b.creado_en).getTime() -
-          new Date(a.creado_en).getTime()
-      );
-    }
-
-    return resultado;
-  }, [
-    tickets,
-    estado,
-    fecha,
-    rol,
-    busqueda,
-    importancia,
-    orden,
-  ]);
 
   function limpiarFiltros() {
-    setEstado("TODOS");
-    setFecha("TODAS");
     setBusqueda("");
+    setFecha("TODAS");
+    setEmpresa("TODAS");
     setImportancia("TODAS");
+    setEstado("TODOS");
     setOrden("RECIENTES");
   }
 
-  const hayFiltros =
-    estado !== "TODOS" ||
-    fecha !== "TODAS" ||
-    (rol === "ADMIN" &&
-      (busqueda.trim() !== "" ||
-        importancia !== "TODAS" ||
-        orden !== "RECIENTES"));
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
+
+  async function cerrarSesion() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
+
+  /* =========================================================
+     LOADING
+  ========================================================= */
 
   if (loading) {
     return (
       <main style={styles.loading}>
-        <div style={styles.loader} />
+        <div
+          style={styles.loadingIcon}
+        >
+          <SupportIcon
+            color="#00AF9A"
+          />
+        </div>
 
-        <p style={styles.loadingText}>Cargando...</p>
+        <span>
+          Cargando tickets...
+        </span>
       </main>
     );
   }
 
+  /* =========================================================
+     PÁGINA
+  ========================================================= */
+
   return (
     <main style={styles.page}>
-      {/* =====================================================
-          CABECERA
-      ===================================================== */}
+      {/* HEADER */}
 
       <header style={styles.header}>
-        <div style={styles.headerInner}>
+        <div
+          style={styles.headerInner}
+        >
           <div style={styles.brand}>
-            <div style={styles.logoIcon}>
-              <SupportIcon />
+            <div
+              style={styles.brandIcon}
+            >
+              <SupportIcon
+                color="#ffffff"
+              />
             </div>
 
             <div>
-              <div style={styles.brandTitle}>IT Support</div>
+              <div
+                style={
+                  styles.brandTitle
+                }
+              >
+                IT Support
+              </div>
 
-              <div style={styles.brandSubtitle}>
-                Gestión de incidencias informáticas
+              <div
+                style={
+                  styles.brandSubtitle
+                }
+              >
+                Gestión de incidencias
+                informáticas
               </div>
             </div>
           </div>
 
-          <div style={styles.userArea}>
-            <div style={styles.userInfo}>
-              <span style={styles.email}>{email}</span>
+          <div
+            style={
+              styles.headerActions
+            }
+          >
+            {/* MANUALES */}
 
-              <span style={styles.role}>
-                {rol === "ADMIN" ? "ADMINISTRADOR" : "USUARIO"}
-              </span>
-            </div>
-
-            <button
-              onClick={cerrarSesion}
-              style={styles.logout}
-              title="Cerrar sesión"
-              aria-label="Cerrar sesión"
+            <a
+              href="https://globalcoffeeindustriessa.sharepoint.com/:f:/g/IgAX4zmqxaTCQ6GyOQ9lakgSAeFKPNoWDIPRPPApKvf1Vhs?e=lq5SPl"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={
+                styles.manualsLink
+              }
             >
-              <LogoutIcon />
-            </button>
+              <BookIcon />
+
+              <span>Manuales</span>
+
+              <ExternalIcon />
+            </a>
+
+            <div
+              style={styles.headerDivider}
+            />
+
+            <div
+              style={styles.userArea}
+            >
+              <div
+                style={styles.userInfo}
+              >
+                <span
+                  style={
+                    styles.userEmail
+                  }
+                >
+                  {email}
+                </span>
+
+                <span
+                  style={styles.role}
+                >
+                  {rol === "ADMIN"
+                    ? "ADMINISTRADOR"
+                    : "USUARIO"}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  cerrarSesion
+                }
+                style={
+                  styles.logoutButton
+                }
+                title="Cerrar sesión"
+              >
+                <LogoutIcon />
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* =====================================================
-          CONTENIDO
-      ===================================================== */}
+      {/* CONTENIDO */}
 
       <div style={styles.container}>
-        {/* CABECERA DE PÁGINA */}
+        {/* CABECERA */}
 
-        <section style={styles.topSection}>
+        <section
+          style={styles.pageHeading}
+        >
           <div>
-            <h1 style={styles.pageTitle}>
+            <h1 style={styles.title}>
               {rol === "ADMIN"
                 ? "Gestión de tickets"
                 : "Mis incidencias"}
             </h1>
 
-            <p style={styles.pageDescription}>
+            <p
+              style={
+                styles.subtitle
+              }
+            >
               {rol === "ADMIN"
-                ? "Consulta y gestiona las incidencias enviadas por los usuarios."
-                : "Consulta el estado de tus incidencias o crea un nuevo ticket."}
+                ? "Consulta, organiza y gestiona las incidencias de soporte."
+                : "Consulta tus incidencias y realiza su seguimiento."}
             </p>
           </div>
 
           <button
-            style={styles.newTicket}
-            onClick={() => router.push("/nuevo-ticket")}
+            type="button"
+            onClick={() =>
+              router.push(
+                "/nuevo-ticket"
+              )
+            }
+            style={
+              styles.newTicketButton
+            }
           >
-            <span style={styles.plus}>+</span>
-            Nuevo ticket
+            <PlusIcon />
+            Nueva incidencia
           </button>
         </section>
 
-        {/* =====================================================
-            TARJETAS DE ESTADO
-        ===================================================== */}
+        {/* ERROR */}
 
-        <section style={styles.stats}>
+        {errorCarga && (
+          <div
+            style={
+              styles.errorMessage
+            }
+          >
+            <AlertIcon />
+            {errorCarga}
+          </div>
+        )}
+
+        {/* CONTADORES */}
+
+        <section
+          style={styles.statusGrid}
+        >
           <StatusCard
-            type="pending"
             title="Pendientes"
-            number={pendientes}
-            active={estado === "PENDIENTE"}
-            onClick={() => seleccionarEstado("PENDIENTE")}
+            count={pendientes}
+            estado="PENDIENTE"
+            activo={
+              estado === "PENDIENTE"
+            }
+            onClick={() =>
+              setEstado(
+                estado === "PENDIENTE"
+                  ? "TODOS"
+                  : "PENDIENTE"
+              )
+            }
           />
 
           <StatusCard
-            type="progress"
             title="En curso"
-            number={enCurso}
-            active={estado === "EN_CURSO"}
-            onClick={() => seleccionarEstado("EN_CURSO")}
+            count={enCurso}
+            estado="EN_CURSO"
+            activo={
+              estado === "EN_CURSO"
+            }
+            onClick={() =>
+              setEstado(
+                estado === "EN_CURSO"
+                  ? "TODOS"
+                  : "EN_CURSO"
+              )
+            }
           />
 
           <StatusCard
-            type="resolved"
             title="Resueltos"
-            number={resueltos}
-            active={estado === "RESUELTO"}
-            onClick={() => seleccionarEstado("RESUELTO")}
+            count={resueltos}
+            estado="RESUELTO"
+            activo={
+              estado === "RESUELTO"
+            }
+            onClick={() =>
+              setEstado(
+                estado === "RESUELTO"
+                  ? "TODOS"
+                  : "RESUELTO"
+              )
+            }
           />
         </section>
 
-        {/* =====================================================
-            FILTROS
-        ===================================================== */}
+        {/* FILTROS */}
 
-        <section style={styles.filtersCard}>
-          {/* BUSCADOR SOLO ADMIN */}
-
+        <section
+          style={styles.filtersCard}
+        >
           {rol === "ADMIN" && (
-            <div style={styles.searchWrapper}>
+            <div
+              style={
+                styles.searchWrapper
+              }
+            >
               <SearchIcon />
 
               <input
-                type="text"
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por nombre, empresa, título, email o número..."
-                style={styles.searchInput}
+                onChange={(e) =>
+                  setBusqueda(
+                    e.target.value
+                  )
+                }
+                placeholder="Buscar por nº, usuario, empresa, correo o incidencia..."
+                style={
+                  styles.searchInput
+                }
               />
             </div>
           )}
 
           <div
-            style={{
-              ...styles.filtersGrid,
-              gridTemplateColumns:
-                rol === "ADMIN"
-                  ? "repeat(4, minmax(0, 1fr))"
-                  : "repeat(2, minmax(0, 1fr))",
-            }}
+            style={styles.filtersRow}
           >
-            {/* FECHA */}
-
-            <select
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              style={styles.select}
+            <FilterField
+              label="Fecha"
             >
-              <option value="TODAS">Todas las fechas</option>
-              <option value="HOY">Hoy</option>
-              <option value="7_DIAS">Últimos 7 días</option>
-              <option value="30_DIAS">Últimos 30 días</option>
-            </select>
+              <select
+                value={fecha}
+                onChange={(e) =>
+                  setFecha(
+                    e.target.value
+                  )
+                }
+                style={styles.select}
+              >
+                <option value="TODAS">
+                  Todas
+                </option>
 
-            {/* ESTADO */}
+                <option value="HOY">
+                  Hoy
+                </option>
 
-            <select
-              value={estado}
-              onChange={(e) =>
-                setEstado(e.target.value as EstadoFiltro)
+                <option value="7_DIAS">
+                  Últimos 7 días
+                </option>
+
+                <option value="30_DIAS">
+                  Últimos 30 días
+                </option>
+              </select>
+            </FilterField>
+
+            <FilterField
+              label="Estado"
+            >
+              <select
+                value={estado}
+                onChange={(e) =>
+                  setEstado(
+                    e.target
+                      .value as EstadoFiltro
+                  )
+                }
+                style={styles.select}
+              >
+                <option value="TODOS">
+                  Todos
+                </option>
+
+                <option value="PENDIENTE">
+                  Pendiente
+                </option>
+
+                <option value="EN_CURSO">
+                  En curso
+                </option>
+
+                <option value="RESUELTO">
+                  Resuelto
+                </option>
+              </select>
+            </FilterField>
+
+            {rol === "ADMIN" && (
+              <>
+                <FilterField
+                  label="Empresa"
+                >
+                  <select
+                    value={empresa}
+                    onChange={(e) =>
+                      setEmpresa(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.select
+                    }
+                  >
+                    <option value="TODAS">
+                      Todas
+                    </option>
+
+                    {EMPRESAS.map(
+                      (
+                        empresaItem
+                      ) => (
+                        <option
+                          key={
+                            empresaItem
+                          }
+                          value={
+                            empresaItem
+                          }
+                        >
+                          {
+                            empresaItem
+                          }
+                        </option>
+                      )
+                    )}
+                  </select>
+                </FilterField>
+
+                <FilterField
+                  label="Importancia"
+                >
+                  <select
+                    value={
+                      importancia
+                    }
+                    onChange={(e) =>
+                      setImportancia(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.select
+                    }
+                  >
+                    <option value="TODAS">
+                      Todas
+                    </option>
+
+                    <option value="BAJA">
+                      Baja
+                    </option>
+
+                    <option value="MEDIA">
+                      Media
+                    </option>
+
+                    <option value="ALTA">
+                      Alta
+                    </option>
+
+                    <option value="URGENTE">
+                      Urgente
+                    </option>
+                  </select>
+                </FilterField>
+
+                <FilterField
+                  label="Orden"
+                >
+                  <select
+                    value={orden}
+                    onChange={(e) =>
+                      setOrden(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.select
+                    }
+                  >
+                    <option value="RECIENTES">
+                      Más recientes
+                    </option>
+
+                    <option value="ANTIGUOS">
+                      Más antiguos
+                    </option>
+                  </select>
+                </FilterField>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={
+                limpiarFiltros
               }
-              style={styles.select}
+              style={
+                styles.clearButton
+              }
             >
-              <option value="TODOS">Todos los estados</option>
-              <option value="PENDIENTE">Pendiente</option>
-              <option value="EN_CURSO">En curso</option>
-              <option value="RESUELTO">Resuelto</option>
-            </select>
-
-            {/* IMPORTANCIA - SOLO ADMIN */}
-
-            {rol === "ADMIN" && (
-              <select
-                value={importancia}
-                onChange={(e) => setImportancia(e.target.value)}
-                style={styles.select}
-              >
-                <option value="TODAS">Toda importancia</option>
-                <option value="BAJA">Baja</option>
-                <option value="MEDIA">Media</option>
-                <option value="ALTA">Alta</option>
-                <option value="URGENTE">Urgente</option>
-              </select>
-            )}
-
-            {/* ORDEN - SOLO ADMIN */}
-
-            {rol === "ADMIN" && (
-              <select
-                value={orden}
-                onChange={(e) => setOrden(e.target.value)}
-                style={styles.select}
-              >
-                <option value="RECIENTES">Más recientes</option>
-                <option value="ANTIGUOS">Más antiguos</option>
-              </select>
-            )}
+              Limpiar filtros
+            </button>
           </div>
         </section>
 
-        {/* =====================================================
-            ERROR
-        ===================================================== */}
+        {/* LISTADO */}
 
-        {errorCarga && (
-          <div style={styles.errorMessage}>
-            <AlertIcon />
-            <span>{errorCarga}</span>
-          </div>
-        )}
-
-        {/* =====================================================
-            LISTADO
-        ===================================================== */}
-
-        <section style={styles.ticketsCard}>
-          <div style={styles.cardHeader}>
+        <section
+          style={styles.listCard}
+        >
+          <div
+            style={styles.listHeader}
+          >
             <div>
-              <h2 style={styles.cardTitle}>
-                {rol === "ADMIN" ? "Tickets" : "Mis tickets"}
+              <h2
+                style={
+                  styles.listTitle
+                }
+              >
+                {rol === "ADMIN"
+                  ? "Incidencias"
+                  : "Mis tickets"}
               </h2>
 
-              <p style={styles.cardDescription}>
-                {ticketsFiltrados.length === 1
-                  ? "1 incidencia"
-                  : `${ticketsFiltrados.length} incidencias`}
+              <p
+                style={
+                  styles.listSubtitle
+                }
+              >
+                {ticketsFiltrados.length}{" "}
+                {ticketsFiltrados.length ===
+                1
+                  ? "resultado"
+                  : "resultados"}
               </p>
             </div>
-
-            {hayFiltros && (
-              <button
-                onClick={limpiarFiltros}
-                style={styles.clearFilter}
-              >
-                Limpiar filtros
-              </button>
-            )}
           </div>
 
-          {ticketsFiltrados.length === 0 ? (
-            <div style={styles.empty}>
-              <div style={styles.emptyIcon}>
+          {ticketsFiltrados.length ===
+          0 ? (
+            <div
+              style={
+                styles.emptyState
+              }
+            >
+              <div
+                style={
+                  styles.emptyIcon
+                }
+              >
                 <TicketIcon />
               </div>
 
-              <h3 style={styles.emptyTitle}>
-                {tickets.length === 0
-                  ? "No hay tickets todavía"
-                  : "No hay resultados"}
+              <h3
+                style={
+                  styles.emptyTitle
+                }
+              >
+                No hay incidencias
               </h3>
 
-              <p style={styles.emptyText}>
-                {tickets.length === 0
-                  ? rol === "ADMIN"
-                    ? "Cuando los usuarios creen incidencias aparecerán aquí."
-                    : "Cuando crees tu primera incidencia aparecerá aquí."
-                  : "No hay incidencias que coincidan con los filtros seleccionados."}
+              <p
+                style={
+                  styles.emptyText
+                }
+              >
+                No se han encontrado
+                tickets con los filtros
+                seleccionados.
               </p>
-
-              {rol !== "ADMIN" && tickets.length === 0 && (
-                <button
-                  style={styles.secondaryButton}
-                  onClick={() => router.push("/nuevo-ticket")}
-                >
-                  Crear mi primer ticket
-                </button>
-              )}
             </div>
           ) : (
-            <div style={styles.ticketList}>
-              {ticketsFiltrados.map((ticket) => (
-                <TicketRow
-                  key={ticket.id}
-                  ticket={ticket}
-                  rol={rol}
-                  onClick={() =>
-                    router.push(`/tickets/${ticket.id}`)
-                  }
-                  onEstadoChange={cambiarEstadoTicket}
-                />
-              ))}
+            <div
+              style={
+                styles.ticketList
+              }
+            >
+              {ticketsFiltrados.map(
+                (ticket) => (
+                  <TicketRow
+                    key={ticket.id}
+                    ticket={ticket}
+                    rol={rol}
+                    actualizando={
+                      actualizandoId ===
+                      ticket.id
+                    }
+                    onOpen={() =>
+                      router.push(
+                        `/tickets/${ticket.id}`
+                      )
+                    }
+                    onEstadoChange={(
+                      nuevoEstado
+                    ) =>
+                      cambiarEstadoTicket(
+                        ticket.id,
+                        nuevoEstado
+                      )
+                    }
+                  />
+                )
+              )}
             </div>
           )}
         </section>
@@ -621,127 +994,279 @@ export default function Home() {
 }
 
 /* =========================================================
-   FILA DE TICKET
+   STATUS CARD
+========================================================= */
+
+function StatusCard({
+  title,
+  count,
+  estado,
+  activo,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  estado: Estado;
+  activo: boolean;
+  onClick: () => void;
+}) {
+  const config = {
+    PENDIENTE: {
+      normal: "#fff8ed",
+      active: "#f8e6ce",
+      border: "#f0dcc0",
+      icon: "#d99525",
+      text: "#8d651f",
+    },
+
+    EN_CURSO: {
+      normal: "#f1f7fd",
+      active: "#dcecff",
+      border: "#d7e7f6",
+      icon: "#3a86d1",
+      text: "#316da7",
+    },
+
+    RESUELTO: {
+      normal: "#edf8f5",
+      active: "#d6f1eb",
+      border: "#d1ebe4",
+      icon: "#00A990",
+      text: "#177b6b",
+    },
+  };
+
+  const current =
+    config[estado];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...styles.statusCard,
+        background: activo
+          ? current.active
+          : current.normal,
+        borderColor:
+          current.border,
+      }}
+    >
+      <div
+        style={{
+          ...styles.statusIcon,
+          color: current.icon,
+        }}
+      >
+        {estado ===
+        "PENDIENTE" ? (
+          <ClockIcon />
+        ) : estado ===
+          "EN_CURSO" ? (
+          <ProgressIcon />
+        ) : (
+          <CheckCircleIcon />
+        )}
+      </div>
+
+      <div>
+        <div
+          style={{
+            ...styles.statusCount,
+            color: current.text,
+          }}
+        >
+          {count}
+        </div>
+
+        <div
+          style={
+            styles.statusTitle
+          }
+        >
+          {title}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* =========================================================
+   TICKET ROW
 ========================================================= */
 
 function TicketRow({
   ticket,
   rol,
-  onClick,
+  actualizando,
+  onOpen,
   onEstadoChange,
 }: {
   ticket: Ticket;
   rol: Rol | null;
-  onClick: () => void;
+  actualizando: boolean;
+  onOpen: () => void;
   onEstadoChange: (
-    ticketId: string,
-    nuevoEstado: Estado
-  ) => Promise<void>;
+    estado: Estado
+  ) => void;
 }) {
-  const [cambiandoEstado, setCambiandoEstado] =
-    useState(false);
-
-  async function cambiarEstado(
-    e: React.ChangeEvent<HTMLSelectElement>
-  ) {
-    e.stopPropagation();
-
-    const nuevoEstado = e.target.value as Estado;
-
-    if (nuevoEstado === ticket.estado) {
-      return;
-    }
-
-    setCambiandoEstado(true);
-
-    await onEstadoChange(ticket.id, nuevoEstado);
-
-    setCambiandoEstado(false);
-  }
-
   return (
-    <div style={styles.ticketRow} onClick={onClick}>
-      {/* INFORMACIÓN PRINCIPAL */}
+    <div
+      style={styles.ticketRow}
+      onClick={onOpen}
+    >
+      <div
+        style={styles.ticketMain}
+      >
+        <div
+          style={
+            styles.ticketTopLine
+          }
+        >
+          <span
+            style={
+              styles.ticketNumber
+            }
+          >
+            {ticket.numero
+              ? `#${ticket.numero}`
+              : "Ticket"}
+          </span>
 
-      <div style={styles.ticketMain}>
-        <div style={styles.ticketTopLine}>
-          <span style={styles.ticketNumber}>
-            {ticket.numero ? `#${ticket.numero}` : "Ticket"}
+          <span
+            style={
+              styles.ticketDate
+            }
+          >
+            {formatearFecha(
+              ticket.creado_en
+            )}
           </span>
         </div>
 
-        <h3 style={styles.ticketTitle}>{ticket.titulo}</h3>
+        <h3
+          style={styles.ticketTitle}
+        >
+          {ticket.titulo}
+        </h3>
 
-        <div style={styles.ticketMeta}>
+        <div
+          style={styles.ticketMeta}
+        >
+          <span>
+            {ticket.nombre}
+          </span>
+
+          <span
+            style={styles.metaDot}
+          >
+            •
+          </span>
+
+          <span>
+            {ticket.empresa}
+          </span>
+
           {rol === "ADMIN" && (
             <>
-              <span>{ticket.nombre}</span>
+              <span
+                style={
+                  styles.metaDot
+                }
+              >
+                •
+              </span>
 
-              <span style={styles.dot}>•</span>
-
-              <span>{ticket.empresa}</span>
-
-              <span style={styles.dot}>•</span>
+              <span>
+                {ticket.email}
+              </span>
             </>
           )}
-
-          <span>{formatearFecha(ticket.creado_en)}</span>
         </div>
       </div>
 
-      {/* ZONA DERECHA */}
-
       <div
-        style={styles.ticketActions}
-        onClick={(e) => e.stopPropagation()}
+        style={
+          styles.ticketActions
+        }
+        onClick={(e) =>
+          e.stopPropagation()
+        }
       >
-        {/* IMPORTANCIA */}
+        <div
+          style={styles.actionBlock}
+        >
+          <span
+            style={
+              styles.actionLabel
+            }
+          >
+            Importancia
+          </span>
 
-        <div style={styles.actionBlock}>
-          <span style={styles.actionLabel}>Importancia</span>
-
-          <PriorityBadge importancia={ticket.importancia} />
+          <PriorityBadge
+            importancia={
+              ticket.importancia
+            }
+          />
         </div>
 
-        {/* ESTADO */}
-
-        <div style={styles.actionBlock}>
-          <span style={styles.actionLabel}>Estado</span>
+        <div
+          style={styles.actionBlock}
+        >
+          <span
+            style={
+              styles.actionLabel
+            }
+          >
+            Estado
+          </span>
 
           {rol === "ADMIN" ? (
             <select
               value={ticket.estado}
-              onChange={cambiarEstado}
-              disabled={cambiandoEstado}
+              disabled={actualizando}
+              onChange={(e) =>
+                onEstadoChange(
+                  e.target
+                    .value as Estado
+                )
+              }
               style={{
                 ...styles.estadoSelect,
-                ...getEstadoSelectStyle(ticket.estado),
-                opacity: cambiandoEstado ? 0.6 : 1,
-                cursor: cambiandoEstado
-                  ? "not-allowed"
-                  : "pointer",
+                ...getEstadoSelectStyle(
+                  ticket.estado
+                ),
+                opacity:
+                  actualizando
+                    ? 0.6
+                    : 1,
               }}
             >
-              <option value="PENDIENTE">● Pendiente</option>
-              <option value="EN_CURSO">● En curso</option>
-              <option value="RESUELTO">● Resuelto</option>
+              <option value="PENDIENTE">
+                ● Pendiente
+              </option>
+
+              <option value="EN_CURSO">
+                ● En curso
+              </option>
+
+              <option value="RESUELTO">
+                ● Resuelto
+              </option>
             </select>
           ) : (
-            <StatusBadge estado={ticket.estado} />
+            <StatusBadge
+              estado={ticket.estado}
+            />
           )}
         </div>
 
-        {/* ABRIR */}
-
         <button
           type="button"
-          style={styles.openTicketButton}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClick();
-          }}
+          onClick={onOpen}
+          style={styles.openButton}
           title="Abrir ticket"
-          aria-label="Abrir ticket"
         >
           <ChevronRightIcon />
         </button>
@@ -751,95 +1276,37 @@ function TicketRow({
 }
 
 /* =========================================================
-   ESTILO DEL SELECT DE ESTADO
+   FILTRO
 ========================================================= */
 
-function getEstadoSelectStyle(
-  estado: Estado
-): React.CSSProperties {
-  if (estado === "PENDIENTE") {
-    return {
-      background: "#fff8ed",
-      borderColor: "#e8bd72",
-      color: "#9b661d",
-    };
-  }
-
-  if (estado === "EN_CURSO") {
-    return {
-      background: "#edf6ff",
-      borderColor: "#9dcaf3",
-      color: "#2374c6",
-    };
-  }
-
-  return {
-    background: "#edf9f6",
-    borderColor: "#9bd7c9",
-    color: "#16806c",
-  };
-}
-
-/* =========================================================
-   ESTADO PARA USUARIO
-========================================================= */
-
-function StatusBadge({
-  estado,
+function FilterField({
+  label,
+  children,
 }: {
-  estado: Estado;
+  label: string;
+  children: React.ReactNode;
 }) {
-  const config = {
-    PENDIENTE: {
-      label: "Pendiente",
-      background: "#fff8ed",
-      color: "#9b661d",
-      border: "#e8bd72",
-      dot: "#d99525",
-    },
-
-    EN_CURSO: {
-      label: "En curso",
-      background: "#edf6ff",
-      color: "#2374c6",
-      border: "#9dcaf3",
-      dot: "#2374c6",
-    },
-
-    RESUELTO: {
-      label: "Resuelto",
-      background: "#edf9f6",
-      color: "#16806c",
-      border: "#9bd7c9",
-      dot: "#00a990",
-    },
-  };
-
-  const current = config[estado];
-
   return (
-    <span
-      style={{
-        ...styles.statusBadge,
-        background: current.background,
-        color: current.color,
-        borderColor: current.border,
-      }}
+    <div
+      style={
+        styles.filterField
+      }
     >
-      <span
-        style={{
-          ...styles.badgeDot,
-          background: current.dot,
-        }}
-      />
+      <label
+        style={
+          styles.filterLabel
+        }
+      >
+        {label}
+      </label>
 
-      {current.label}
-    </span>
+      {children}
+    </div>
   );
 }
 
 /* =========================================================
-   IMPORTANCIA
+   BADGES
 ========================================================= */
 
 function PriorityBadge({
@@ -881,21 +1348,25 @@ function PriorityBadge({
     },
   };
 
-  const current = config[importancia] ?? config.MEDIA;
+  const current =
+    config[importancia];
 
   return (
     <span
       style={{
         ...styles.priorityBadge,
-        background: current.background,
+        background:
+          current.background,
         color: current.color,
-        borderColor: current.border,
+        borderColor:
+          current.border,
       }}
     >
       <span
         style={{
           ...styles.badgeDot,
-          background: current.dot,
+          background:
+            current.dot,
         }}
       />
 
@@ -904,110 +1375,125 @@ function PriorityBadge({
   );
 }
 
-/* =========================================================
-   TARJETAS SUPERIORES
-========================================================= */
-
-function StatusCard({
-  type,
-  title,
-  number,
-  active,
-  onClick,
+function StatusBadge({
+  estado,
 }: {
-  type: "pending" | "progress" | "resolved";
-  title: string;
-  number: number;
-  active: boolean;
-  onClick: () => void;
+  estado: Estado;
 }) {
   const config = {
-    pending: {
-      background: "#fff8ef",
-      activeBackground: "#f8e6ce",
-      iconBackground: "#fff0dc",
-      activeIconBackground: "#f3d6b1",
-      iconColor: "#252525",
+    PENDIENTE: {
+      label: "Pendiente",
+      background: "#fff8ed",
+      color: "#9b661d",
+      border: "#e8bd72",
+      dot: "#d99525",
     },
 
-    progress: {
-      background: "#f1f8ff",
-      activeBackground: "#dcecff",
-      iconBackground: "#dfefff",
-      activeIconBackground: "#c5e0ff",
-      iconColor: "#1479ff",
+    EN_CURSO: {
+      label: "En curso",
+      background: "#edf6ff",
+      color: "#2374c6",
+      border: "#9dcaf3",
+      dot: "#2374c6",
     },
 
-    resolved: {
-      background: "#f0fbf8",
-      activeBackground: "#d6f1eb",
-      iconBackground: "#dcf6f0",
-      activeIconBackground: "#bee8df",
-      iconColor: "#00a990",
+    RESUELTO: {
+      label: "Resuelto",
+      background: "#edf9f6",
+      color: "#16806c",
+      border: "#9bd7c9",
+      dot: "#00a990",
     },
   };
 
-  const current = config[type];
+  const current =
+    config[estado];
 
   return (
-    <button
-      onClick={onClick}
+    <span
       style={{
-        ...styles.statusCard,
-        background: active
-          ? current.activeBackground
-          : current.background,
+        ...styles.statusBadge,
+        background:
+          current.background,
+        color: current.color,
+        borderColor:
+          current.border,
       }}
     >
-      <div
+      <span
         style={{
-          ...styles.statusIcon,
-          background: active
-            ? current.activeIconBackground
-            : current.iconBackground,
-          color: current.iconColor,
+          ...styles.badgeDot,
+          background:
+            current.dot,
         }}
-      >
-        {type === "pending" && <PendingIcon />}
-        {type === "progress" && <ProgressIcon />}
-        {type === "resolved" && <ResolvedIcon />}
-      </div>
+      />
 
-      <div style={styles.statusContent}>
-        <span style={styles.statusTitle}>{title}</span>
-
-        <strong style={styles.statusNumber}>{number}</strong>
-      </div>
-    </button>
+      {current.label}
+    </span>
   );
+}
+
+function getEstadoSelectStyle(
+  estado: Estado
+): React.CSSProperties {
+  if (estado === "PENDIENTE") {
+    return {
+      background: "#fff8ed",
+      borderColor: "#e8bd72",
+      color: "#9b661d",
+    };
+  }
+
+  if (estado === "EN_CURSO") {
+    return {
+      background: "#edf6ff",
+      borderColor: "#9dcaf3",
+      color: "#2374c6",
+    };
+  }
+
+  return {
+    background: "#edf9f6",
+    borderColor: "#9bd7c9",
+    color: "#16806c",
+  };
 }
 
 /* =========================================================
    FECHA
 ========================================================= */
 
-function formatearFecha(fecha: string) {
-  return new Intl.DateTimeFormat("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(fecha));
+function formatearFecha(
+  fecha: string
+) {
+  return new Intl.DateTimeFormat(
+    "es-ES",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  ).format(new Date(fecha));
 }
 
 /* =========================================================
    ICONOS
 ========================================================= */
 
-function SupportIcon() {
+function SupportIcon({
+  color = "currentColor",
+}: {
+  color?: string;
+}) {
   return (
     <svg
-      width="24"
-      height="24"
+      width="23"
+      height="23"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="white"
+      stroke={color}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -1020,11 +1506,11 @@ function SupportIcon() {
   );
 }
 
-function PendingIcon() {
+function BookIcon() {
   return (
     <svg
-      width="25"
-      height="25"
+      width="17"
+      height="17"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -1032,10 +1518,84 @@ function PendingIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
-      <path d="M14 2v6h6" />
-      <path d="M8 13h8" />
-      <path d="M8 17h5" />
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+    </svg>
+  );
+}
+
+function ExternalIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle
+        cx="11"
+        cy="11"
+        r="7"
+      />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
+      <path d="M12 7v5l3 2" />
     </svg>
   );
 }
@@ -1043,35 +1603,34 @@ function PendingIcon() {
 function ProgressIcon() {
   return (
     <svg
-      width="27"
-      height="27"
+      width="21"
+      height="21"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
-      <circle cx="12" cy="12" r="3" />
-
-      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.1A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.4h4v.1a1.7 1.7 0 0 0 1 1.7 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4h-.1a1.7 1.7 0 0 0-1.7 1Z" />
+      <path d="M21 12a9 9 0 1 1-9-9" />
+      <path d="M12 3a9 9 0 0 1 9 9" />
     </svg>
   );
 }
 
-function ResolvedIcon() {
+function CheckCircleIcon() {
   return (
     <svg
-      width="26"
-      height="26"
+      width="21"
+      height="21"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
-      <circle cx="12" cy="12" r="9" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
       <path d="m8 12 2.5 2.5L16 9" />
     </svg>
   );
@@ -1080,63 +1639,14 @@ function ResolvedIcon() {
 function TicketIcon() {
   return (
     <svg
-      width="27"
-      height="27"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#00AF9A"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-      <path d="M13 5v2" />
-      <path d="M13 11v2" />
-      <path d="M13 17v2" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg
-      width="17"
-      height="17"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#9ba2a2"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{
-        position: "absolute",
-        left: "15px",
-        top: "50%",
-        transform: "translateY(-50%)",
-        pointerEvents: "none",
-      }}
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
-    </svg>
-  );
-}
-
-function LogoutIcon() {
-  return (
-    <svg
-      width="19"
-      height="19"
+      width="25"
+      height="25"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      strokeWidth="1.8"
     >
-      <path d="M10 17l5-5-5-5" />
-      <path d="M15 12H3" />
-      <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+      <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
     </svg>
   );
 }
@@ -1144,14 +1654,12 @@ function LogoutIcon() {
 function ChevronRightIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      width="17"
+      height="17"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
       <path d="m9 18 6-6-6-6" />
     </svg>
@@ -1161,18 +1669,37 @@ function ChevronRightIcon() {
 function AlertIcon() {
   return (
     <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
+      <path d="M12 8v5" />
+      <path d="M12 16h.01" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg
       width="18"
       height="18"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 8v5" />
-      <path d="M12 16h.01" />
+      <path d="M10 17l5-5-5-5" />
+      <path d="M15 12H3" />
+      <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
     </svg>
   );
 }
@@ -1181,62 +1708,67 @@ function AlertIcon() {
    ESTILOS
 ========================================================= */
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: "100vh",
     background: "#f5f7f7",
-    fontFamily: "'Poppins', Arial, sans-serif",
     color: "#202424",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
   },
 
   loading: {
     minHeight: "100vh",
     background: "#f5f7f7",
     display: "flex",
-    flexDirection: "column",
-    gap: "14px",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "'Poppins', Arial, sans-serif",
+    flexDirection: "column",
+    gap: "12px",
+    color: "#7e8787",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "11px",
   },
 
-  loadingText: {
-    margin: 0,
-    color: "#7b8282",
-    fontSize: "13px",
-  },
-
-  loader: {
-    width: "28px",
-    height: "28px",
-    border: "3px solid #dfe8e7",
-    borderTopColor: "#00AF9A",
-    borderRadius: "50%",
+  loadingIcon: {
+    width: "45px",
+    height: "45px",
+    background: "#eaf8f6",
+    borderRadius: "11px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   header: {
     background: "#ffffff",
-    borderBottom: "1px solid #e8ecec",
+    borderBottom:
+      "1px solid #e8ecec",
   },
 
   headerInner: {
     maxWidth: "1240px",
-    margin: "0 auto",
     minHeight: "78px",
+    margin: "0 auto",
     padding: "0 30px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: "30px",
+    justifyContent:
+      "space-between",
+    gap: "25px",
   },
 
   brand: {
     display: "flex",
     alignItems: "center",
-    gap: "14px",
+    gap: "13px",
   },
 
-  logoIcon: {
+  brandIcon: {
     width: "44px",
     height: "44px",
     borderRadius: "11px",
@@ -1250,19 +1782,49 @@ const styles: Record<string, React.CSSProperties> = {
   brandTitle: {
     fontSize: "17px",
     fontWeight: 700,
-    lineHeight: 1.2,
   },
 
   brandSubtitle: {
-    marginTop: "4px",
-    fontSize: "11px",
-    color: "#8a9191",
+    color: "#899191",
+    fontSize: "10px",
+    marginTop: "3px",
+  },
+
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "17px",
+  },
+
+  manualsLink: {
+    height: "36px",
+    padding: "0 12px",
+    border:
+      "1px solid #dfe4e4",
+    borderRadius: "8px",
+    background: "#ffffff",
+    color: "#555d5d",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    textDecoration: "none",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "10px",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
+
+  headerDivider: {
+    width: "1px",
+    height: "30px",
+    background: "#e7ebeb",
   },
 
   userArea: {
     display: "flex",
     alignItems: "center",
-    gap: "16px",
+    gap: "15px",
   },
 
   userInfo: {
@@ -1272,23 +1834,22 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "3px",
   },
 
-  email: {
-    fontSize: "12px",
-    fontWeight: 500,
+  userEmail: {
+    fontSize: "11px",
   },
 
   role: {
     color: "#00AF9A",
-    fontSize: "10px",
+    fontSize: "9px",
     fontWeight: 700,
-    letterSpacing: "0.5px",
   },
 
-  logout: {
+  logoutButton: {
     width: "38px",
     height: "38px",
+    border:
+      "1px solid #dfe4e4",
     borderRadius: "9px",
-    border: "1px solid #dfe4e4",
     background: "#ffffff",
     color: "#555d5d",
     display: "flex",
@@ -1301,201 +1862,215 @@ const styles: Record<string, React.CSSProperties> = {
     width: "calc(100% - 48px)",
     maxWidth: "1180px",
     margin: "0 auto",
-    padding: "42px 0 70px",
+    padding: "34px 0 70px",
   },
 
-  topSection: {
+  pageHeading: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: "30px",
-    marginBottom: "30px",
+    justifyContent:
+      "space-between",
+    gap: "25px",
+    marginBottom: "26px",
   },
 
-  pageTitle: {
-    margin: "0 0 6px",
-    fontSize: "28px",
+  title: {
+    margin: "0 0 5px",
+    fontSize: "26px",
     fontWeight: 700,
   },
 
-  pageDescription: {
+  subtitle: {
     margin: 0,
-    color: "#7b8282",
-    fontSize: "13px",
+    color: "#858d8d",
+    fontSize: "11px",
   },
 
-  newTicket: {
+  newTicketButton: {
+    height: "42px",
+    padding: "0 16px",
     border: "none",
-    borderRadius: "9px",
+    borderRadius: "8px",
     background: "#00AF9A",
     color: "#ffffff",
-    padding: "12px 18px",
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
-    gap: "8px",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "12px",
+    gap: "7px",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "10px",
     fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-
-  plus: {
-    fontSize: "19px",
-    lineHeight: 1,
-  },
-
-  /* TARJETAS */
-
-  stats: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: "16px",
-    marginBottom: "20px",
-  },
-
-  statusCard: {
-    minHeight: "96px",
-    border: "1px solid transparent",
-    borderRadius: "13px",
-    padding: "18px 20px",
-    display: "flex",
-    alignItems: "center",
-    gap: "17px",
-    textAlign: "left",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    cursor: "pointer",
-    transition: "background 0.18s ease",
-  },
-
-  statusIcon: {
-    width: "52px",
-    height: "52px",
-    borderRadius: "14px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-
-  statusContent: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "4px",
-  },
-
-  statusTitle: {
-    color: "#303535",
-    fontSize: "12px",
-    fontWeight: 500,
-  },
-
-  statusNumber: {
-    color: "#202424",
-    fontSize: "25px",
-    lineHeight: 1,
-    fontWeight: 700,
-  },
-
-  /* FILTROS */
-
-  filtersCard: {
-    background: "#ffffff",
-    border: "1px solid #e5e9e9",
-    borderRadius: "13px",
-    padding: "16px",
-    marginBottom: "20px",
-  },
-
-  searchWrapper: {
-    position: "relative",
-    marginBottom: "12px",
-  },
-
-  searchInput: {
-    width: "100%",
-    boxSizing: "border-box",
-    height: "44px",
-    border: "1px solid #d9dede",
-    borderRadius: "8px",
-    padding: "0 15px 0 43px",
-    background: "#ffffff",
-    color: "#303535",
-    outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "13px",
-  },
-
-  filtersGrid: {
-    display: "grid",
-    gap: "10px",
-  },
-
-  select: {
-    width: "100%",
-    height: "43px",
-    border: "1px solid #d9dede",
-    borderRadius: "8px",
-    padding: "0 13px",
-    background: "#ffffff",
-    color: "#555d5d",
-    outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
     cursor: "pointer",
   },
 
   errorMessage: {
-    background: "#fff1f1",
-    border: "1px solid #f0cece",
-    color: "#a63d3d",
+    padding: "12px 14px",
+    marginBottom: "18px",
+    border:
+      "1px solid #efcaca",
     borderRadius: "9px",
-    padding: "12px 15px",
-    marginBottom: "20px",
+    background: "#fff1f1",
+    color: "#aa4141",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontSize: "10px",
+  },
+
+  statusGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3, minmax(0, 1fr))",
+    gap: "14px",
+    marginBottom: "18px",
+  },
+
+  statusCard: {
+    minHeight: "94px",
+    border: "1px solid",
+    borderRadius: "13px",
+    padding: "18px",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    textAlign: "left",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    cursor: "pointer",
+  },
+
+  statusIcon: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "10px",
+    background:
+      "rgba(255,255,255,0.7)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  statusCount: {
+    fontSize: "23px",
+    fontWeight: 700,
+    lineHeight: 1,
+    marginBottom: "5px",
+  },
+
+  statusTitle: {
+    color: "#626969",
+    fontSize: "10px",
+    fontWeight: 500,
+  },
+
+  filtersCard: {
+    background: "#ffffff",
+    border:
+      "1px solid #e5e9e9",
+    borderRadius: "13px",
+    padding: "18px",
+    marginBottom: "18px",
+  },
+
+  searchWrapper: {
+    height: "41px",
+    boxSizing: "border-box",
+    border:
+      "1px solid #dce1e1",
+    borderRadius: "8px",
+    padding: "0 12px",
+    marginBottom: "15px",
     display: "flex",
     alignItems: "center",
     gap: "9px",
-    fontSize: "11px",
+    color: "#929999",
   },
 
-  /* LISTADO */
+  searchInput: {
+    flex: 1,
+    height: "100%",
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    color: "#333838",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "10px",
+  },
 
-  ticketsCard: {
+  filtersRow: {
+    display: "flex",
+    alignItems: "flex-end",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+
+  filterField: {
+    minWidth: "130px",
+    flex: "1 1 130px",
+  },
+
+  filterLabel: {
+    display: "block",
+    marginBottom: "6px",
+    color: "#777f7f",
+    fontSize: "9px",
+    fontWeight: 600,
+  },
+
+  select: {
+    width: "100%",
+    height: "38px",
+    boxSizing: "border-box",
+    border:
+      "1px solid #dce1e1",
+    borderRadius: "8px",
+    padding: "0 10px",
     background: "#ffffff",
-    border: "1px solid #e8ecec",
-    borderRadius: "14px",
+    color: "#4e5656",
+    outlineColor: "#00AF9A",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "9px",
+  },
+
+  clearButton: {
+    height: "38px",
+    padding: "0 12px",
+    border: "none",
+    background: "transparent",
+    color: "#00A992",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "9px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  listCard: {
+    background: "#ffffff",
+    border:
+      "1px solid #e5e9e9",
+    borderRadius: "13px",
     overflow: "hidden",
   },
 
-  cardHeader: {
-    padding: "22px 24px",
-    borderBottom: "1px solid #edf0f0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "20px",
+  listHeader: {
+    padding: "19px 20px",
+    borderBottom:
+      "1px solid #edf0f0",
   },
 
-  cardTitle: {
-    margin: "0 0 4px",
-    fontSize: "16px",
+  listTitle: {
+    margin: "0 0 3px",
+    fontSize: "14px",
     fontWeight: 700,
   },
 
-  cardDescription: {
+  listSubtitle: {
     margin: 0,
-    color: "#8a9191",
-    fontSize: "11px",
-  },
-
-  clearFilter: {
-    border: "none",
-    background: "transparent",
-    color: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
-    fontWeight: 600,
-    cursor: "pointer",
+    color: "#919898",
+    fontSize: "9px",
   },
 
   ticketList: {
@@ -1504,16 +2079,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   ticketRow: {
-    width: "100%",
-    minHeight: "106px",
+    minHeight: "105px",
+    padding: "17px 20px",
     boxSizing: "border-box",
-    borderBottom: "1px solid #edf0f0",
-    background: "#ffffff",
-    padding: "18px 22px",
+    borderBottom:
+      "1px solid #edf0f0",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: "24px",
+    justifyContent:
+      "space-between",
+    gap: "25px",
     cursor: "pointer",
   },
 
@@ -1525,37 +2100,40 @@ const styles: Record<string, React.CSSProperties> = {
   ticketTopLine: {
     display: "flex",
     alignItems: "center",
-    gap: "7px",
-    marginBottom: "6px",
+    gap: "10px",
+    marginBottom: "5px",
   },
 
   ticketNumber: {
-    color: "#8a9191",
-    fontSize: "10px",
-    fontWeight: 600,
+    color: "#00A992",
+    fontSize: "9px",
+    fontWeight: 700,
+  },
+
+  ticketDate: {
+    color: "#a0a6a6",
+    fontSize: "8px",
   },
 
   ticketTitle: {
     margin: "0 0 7px",
-    color: "#252929",
-    fontSize: "14px",
+    fontSize: "12px",
     fontWeight: 600,
+    color: "#292e2e",
   },
 
   ticketMeta: {
+    color: "#858d8d",
     display: "flex",
     alignItems: "center",
     flexWrap: "wrap",
     gap: "6px",
-    color: "#8a9191",
-    fontSize: "10px",
+    fontSize: "9px",
   },
 
-  dot: {
-    color: "#c2c7c7",
+  metaDot: {
+    color: "#c4caca",
   },
-
-  /* ACCIONES DE LA FILA */
 
   ticketActions: {
     display: "flex",
@@ -1571,9 +2149,43 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   actionLabel: {
-    color: "#949b9b",
+    color: "#969d9d",
     fontSize: "9px",
-    fontWeight: 500,
+  },
+
+  priorityBadge: {
+    minWidth: "104px",
+    height: "36px",
+    boxSizing: "border-box",
+    border: "1px solid",
+    borderRadius: "8px",
+    padding: "0 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    fontSize: "9px",
+    fontWeight: 600,
+  },
+
+  statusBadge: {
+    minWidth: "132px",
+    height: "36px",
+    boxSizing: "border-box",
+    border: "1px solid",
+    borderRadius: "8px",
+    padding: "0 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    fontSize: "9px",
+    fontWeight: 600,
+  },
+
+  badgeDot: {
+    width: "6px",
+    height: "6px",
+    borderRadius: "50%",
+    flexShrink: 0,
   },
 
   estadoSelect: {
@@ -1584,104 +2196,57 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "8px",
     padding: "0 10px",
     outline: "none",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "10px",
+    fontFamily:
+      "'Poppins', Arial, sans-serif",
+    fontSize: "9px",
     fontWeight: 600,
+    cursor: "pointer",
   },
 
-  statusBadge: {
-    minWidth: "112px",
-    height: "36px",
-    boxSizing: "border-box",
-    border: "1px solid",
-    borderRadius: "8px",
-    padding: "0 11px",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "7px",
-    fontSize: "10px",
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-  },
-
-  priorityBadge: {
-    height: "36px",
-    boxSizing: "border-box",
-    border: "1px solid",
-    borderRadius: "8px",
-    padding: "0 12px",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "7px",
-    fontSize: "10px",
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-  },
-
-  badgeDot: {
-    width: "6px",
-    height: "6px",
-    borderRadius: "50%",
-    flexShrink: 0,
-  },
-
-  openTicketButton: {
+  openButton: {
     width: "36px",
     height: "36px",
-    border: "1px solid #e0e5e5",
+    border:
+      "1px solid #dfe4e4",
     borderRadius: "8px",
     background: "#ffffff",
-    color: "#8b9292",
+    color: "#6d7575",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
   },
 
-  /* VACÍO */
-
-  empty: {
+  emptyState: {
     minHeight: "280px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    padding: "40px 20px",
+    padding: "30px",
   },
 
   emptyIcon: {
-    width: "56px",
-    height: "56px",
-    borderRadius: "14px",
+    width: "52px",
+    height: "52px",
+    borderRadius: "13px",
     background: "#ecf9f7",
+    color: "#00AF9A",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: "16px",
+    marginBottom: "13px",
   },
 
   emptyTitle: {
-    margin: "0 0 7px",
-    fontSize: "15px",
-    fontWeight: 600,
+    margin: "0 0 5px",
+    fontSize: "13px",
   },
 
   emptyText: {
-    margin: "0 0 20px",
-    color: "#8a9191",
-    fontSize: "12px",
-  },
-
-  secondaryButton: {
-    padding: "10px 16px",
-    border: "1px solid #00AF9A",
-    borderRadius: "8px",
-    background: "#ffffff",
-    color: "#008f7e",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
-    fontWeight: 600,
-    cursor: "pointer",
+    margin: 0,
+    color: "#909797",
+    fontSize: "10px",
   },
 };
