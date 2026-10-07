@@ -866,6 +866,56 @@ export default function TicketPage() {
       ]
     );
 
+    /*
+     * CORREO AUTOMÁTICO DE SEGUIMIENTO
+     *
+     * ADMIN   -> usuario del ticket
+     * USUARIO -> Helpdesk
+     *
+     * El fallo del correo no impide que
+     * el seguimiento quede guardado.
+     */
+    try {
+      const respuestaCorreo =
+        await fetch(
+          "/api/tickets/seguimiento",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              numero: ticket.numero,
+              ticketId: ticket.id,
+              titulo: ticket.titulo,
+              mensaje: mensajeBD,
+              nombre: ticket.nombre,
+              empresa: ticket.empresa,
+              email: ticket.email,
+              autorRol: rol,
+            }),
+          }
+        );
+
+      if (!respuestaCorreo.ok) {
+        const detalle =
+          await respuestaCorreo
+            .json()
+            .catch(() => null);
+
+        console.error(
+          "El seguimiento se guardó, pero no se pudo enviar el correo:",
+          detalle
+        );
+      }
+    } catch (correoError) {
+      console.error(
+        "El seguimiento se guardó, pero falló la notificación por correo:",
+        correoError
+      );
+    }
+
     imagenesPendientes.forEach(
       (imagen) => {
         URL.revokeObjectURL(
@@ -2943,8 +2993,7 @@ const styles: Record<
 
   card: {
     background: "#ffffff",
-    border:
-      "1px solid #e5e9e9",
+    border: "1px solid #e5e9e9",
     borderRadius: "14px",
     padding: "26px",
     marginBottom: "20px",
@@ -2956,8 +3005,7 @@ const styles: Record<
     gap: "12px",
     paddingBottom: "18px",
     marginBottom: "20px",
-    borderBottom:
-      "1px solid #edf0f0",
+    borderBottom: "1px solid #edf0f0",
   },
 
   cardHeadingCompact: {
@@ -2966,8 +3014,7 @@ const styles: Record<
     gap: "11px",
     paddingBottom: "17px",
     marginBottom: "18px",
-    borderBottom:
-      "1px solid #edf0f0",
+    borderBottom: "1px solid #edf0f0",
   },
 
   sectionIcon: {
@@ -3014,8 +3061,7 @@ const styles: Record<
 
   descriptionBox: {
     background: "#f8fafa",
-    border:
-      "1px solid #edf0f0",
+    border: "1px solid #edf0f0",
     borderRadius: "9px",
     padding: "15px",
     color: "#4f5656",
@@ -3034,15 +3080,13 @@ const styles: Record<
     width: "100%",
     height: "44px",
     boxSizing: "border-box",
-    border:
-      "1px solid #d9dede",
+    border: "1px solid #d9dede",
     borderRadius: "8px",
     padding: "0 11px",
     background: "#ffffff",
     color: "#303535",
     outlineColor: "#00AF9A",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "12px",
   },
 
@@ -3082,8 +3126,7 @@ const styles: Record<
     alignItems: "center",
     gap: "8px",
     background: "#fff1f1",
-    border:
-      "1px solid #f0cece",
+    border: "1px solid #f0cece",
     color: "#a63d3d",
     fontSize: "12px",
   },
@@ -3135,8 +3178,7 @@ const styles: Record<
 
   timelineHeader: {
     display: "flex",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     gap: "15px",
     marginBottom: "5px",
   },
@@ -3172,8 +3214,7 @@ const styles: Record<
     height: "82px",
     padding: 0,
     overflow: "hidden",
-    border:
-      "1px solid #e1e6e6",
+    border: "1px solid #e1e6e6",
     borderRadius: "8px",
     background: "#f5f7f7",
     cursor: "pointer",
@@ -3188,8 +3229,7 @@ const styles: Record<
 
   followUpComposer: {
     paddingTop: "20px",
-    borderTop:
-      "1px solid #edf0f0",
+    borderTop: "1px solid #edf0f0",
   },
 
   textarea: {
@@ -3197,13 +3237,11 @@ const styles: Record<
     minHeight: "105px",
     resize: "vertical",
     boxSizing: "border-box",
-    border:
-      "1px solid #d9dede",
+    border: "1px solid #d9dede",
     borderRadius: "8px",
     padding: "12px",
     outlineColor: "#00AF9A",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "12px",
     lineHeight: 1.6,
   },
@@ -3221,8 +3259,7 @@ const styles: Record<
     position: "relative",
     borderRadius: "8px",
     overflow: "hidden",
-    border:
-      "1px solid #e1e6e6",
+    border: "1px solid #e1e6e6",
   },
 
   previewImage: {
@@ -3240,16 +3277,14 @@ const styles: Record<
     padding: 0,
     border: "none",
     borderRadius: "50%",
-    background:
-      "rgba(0,0,0,0.65)",
+    background: "rgba(0,0,0,0.65)",
     color: "#ffffff",
     cursor: "pointer",
   },
 
   composerFooter: {
     display: "flex",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
     gap: "15px",
     marginTop: "11px",
@@ -3265,8 +3300,7 @@ const styles: Record<
   attachButton: {
     height: "40px",
     padding: "0 13px",
-    border:
-      "1px solid #d7dddd",
+    border: "1px solid #d7dddd",
     borderRadius: "8px",
     background: "#ffffff",
     color: "#566060",
@@ -3302,8 +3336,7 @@ const styles: Record<
     alignItems: "center",
     justifyContent: "center",
     gap: "7px",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     fontWeight: 600,
   },
@@ -3370,8 +3403,7 @@ const styles: Record<
 
   colorRow: {
     display: "grid",
-    gridTemplateColumns:
-      "46px 1fr",
+    gridTemplateColumns: "46px 1fr",
     gap: "8px",
     marginTop: "8px",
   },
@@ -3380,8 +3412,7 @@ const styles: Record<
     width: "46px",
     height: "38px",
     padding: "3px",
-    border:
-      "1px solid #d9dede",
+    border: "1px solid #d9dede",
     borderRadius: "8px",
     background: "#ffffff",
     cursor: "pointer",
@@ -3389,13 +3420,11 @@ const styles: Record<
 
   createTagButton: {
     height: "38px",
-    border:
-      "1px solid #00AF9A",
+    border: "1px solid #00AF9A",
     borderRadius: "8px",
     background: "#ffffff",
     color: "#008f7e",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
+    fontFamily: "'Poppins', Arial, sans-serif",
     fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
@@ -3403,20 +3432,17 @@ const styles: Record<
 
   infoCard: {
     background: "#ffffff",
-    border:
-      "1px solid #e5e9e9",
+    border: "1px solid #e5e9e9",
     borderRadius: "14px",
     padding: "18px 20px",
   },
 
   infoRow: {
     display: "flex",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     gap: "15px",
     padding: "9px 0",
-    borderBottom:
-      "1px solid #f0f2f2",
+    borderBottom: "1px solid #f0f2f2",
     color: "#858d8d",
     fontSize: "10px",
   },
@@ -3425,8 +3451,7 @@ const styles: Record<
     position: "fixed",
     inset: 0,
     zIndex: 9999,
-    background:
-      "rgba(16,20,20,0.82)",
+    background: "rgba(16,20,20,0.82)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -3447,11 +3472,9 @@ const styles: Record<
     right: "28px",
     width: "38px",
     height: "38px",
-    border:
-      "1px solid rgba(255,255,255,0.3)",
+    border: "1px solid rgba(255,255,255,0.3)",
     borderRadius: "50%",
-    background:
-      "rgba(0,0,0,0.25)",
+    background: "rgba(0,0,0,0.25)",
     color: "#ffffff",
     fontSize: "24px",
     cursor: "pointer",
