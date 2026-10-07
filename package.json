@@ -12,7 +12,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-     "resend": "",
+     "resend": ""
   },
   "devDependencies": {
     "typescript": "latest",
