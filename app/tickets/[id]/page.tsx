@@ -422,6 +422,10 @@ export default function TicketPage() {
   async function guardarDatosAdmin() {
     if (!ticket || rol !== "ADMIN") return;
 
+    const pasaAEnCurso =
+      ticket.estado !== "EN_CURSO" &&
+      estadoEditado === "EN_CURSO";
+
     const ahora = new Date().toISOString();
 
     const cambiosTicket: {
@@ -525,6 +529,60 @@ export default function TicketPage() {
     );
 
     setTagsTicketOriginales([...tagsTicket]);
+
+    /*
+     * CORREO AUTOMÁTICO AL PASAR A EN CURSO.
+     *
+     * El estado ya está guardado en Supabase.
+     * Si el correo falla, no deshacemos
+     * el cambio de estado.
+     */
+    if (pasaAEnCurso) {
+      try {
+        const respuestaCorreo =
+          await fetch(
+            "/api/tickets/gestionado",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body: JSON.stringify({
+                numero: ticket.numero,
+                ticketId: ticket.id,
+                titulo: ticket.titulo,
+                nombre:
+                  nombre.trim() ||
+                  ticket.nombre,
+                empresa:
+                  empresa ||
+                  ticket.empresa,
+                email:
+                  email.trim() ||
+                  ticket.email,
+              }),
+            }
+          );
+
+        if (!respuestaCorreo.ok) {
+          const detalle =
+            await respuestaCorreo
+              .json()
+              .catch(() => null);
+
+          console.error(
+            "El estado se actualizó, pero no se pudo enviar el correo de incidencia en gestión:",
+            detalle
+          );
+        }
+      } catch (correoError) {
+        console.error(
+          "El estado se actualizó, pero falló la notificación de incidencia en gestión:",
+          correoError
+        );
+      }
+    }
   }
 
   function seleccionarTag(tagId: string) {
@@ -1163,12 +1221,15 @@ export default function TicketPage() {
                   <option value="BAJA">
                     ● Baja
                   </option>
+
                   <option value="MEDIA">
                     ● Media
                   </option>
+
                   <option value="ALTA">
                     ● Alta
                   </option>
+
                   <option value="URGENTE">
                     ● Urgente
                   </option>
@@ -1218,9 +1279,11 @@ export default function TicketPage() {
                   <option value="PENDIENTE">
                     ● Pendiente
                   </option>
+
                   <option value="EN_CURSO">
                     ● En curso
                   </option>
+
                   <option value="RESUELTO">
                     ● Resuelto
                   </option>
@@ -1329,7 +1392,7 @@ export default function TicketPage() {
               </div>
             </section>
 
-            <section
+                      <section
               style={styles.card}
             >
               <div
@@ -1692,7 +1755,8 @@ export default function TicketPage() {
               </div>
             </section>
           </div>
-                    <aside
+
+          <aside
             style={styles.sideColumn}
           >
             <section style={styles.card}>
@@ -2731,16 +2795,13 @@ function LogoutIcon() {
    ESTILOS
 ========================================================= */
 
-const styles: Record<
-  string,
-  React.CSSProperties
-> = {
+const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#f5f7f7",
-    color: "#202424",
+    color: "#202626",
     fontFamily:
-      "'Poppins', Arial, sans-serif",
+      "'Poppins', Arial, Helvetica, sans-serif",
   },
 
   loading: {
@@ -2748,18 +2809,18 @@ const styles: Record<
     background: "#f5f7f7",
     display: "flex",
     flexDirection: "column",
-    gap: "14px",
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
     fontFamily:
-      "'Poppins', Arial, sans-serif",
+      "'Poppins', Arial, Helvetica, sans-serif",
   },
 
   loadingIcon: {
-    width: "48px",
-    height: "48px",
-    borderRadius: "12px",
-    background: "#e9f8f5",
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    background: "#e6f7f4",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -2767,116 +2828,129 @@ const styles: Record<
 
   loadingText: {
     margin: 0,
-    color: "#7b8282",
-    fontSize: "13px",
+    fontSize: 13,
+    fontWeight: 500,
+    color: "#697474",
   },
 
   header: {
+    width: "100%",
     background: "#ffffff",
-    borderBottom:
-      "1px solid #e8ecec",
+    borderBottom: "1px solid #e5eaea",
   },
 
   headerInner: {
-    maxWidth: "1320px",
-    minHeight: "86px",
+    width: "100%",
+    maxWidth: 1320,
+    minHeight: 86,
     margin: "0 auto",
     padding: "0 32px",
     display: "flex",
     alignItems: "center",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
+    boxSizing: "border-box",
   },
 
   brand: {
     display: "flex",
     alignItems: "center",
-    gap: "14px",
+    gap: 14,
   },
 
   logoIcon: {
-    width: "48px",
-    height: "48px",
-    borderRadius: "12px",
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     background: "#00AF9A",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   brandTitle: {
-    fontSize: "19px",
+    fontSize: 19,
+    lineHeight: 1.2,
     fontWeight: 700,
+    color: "#1f2929",
   },
 
   brandSubtitle: {
-    marginTop: "3px",
-    color: "#8a9191",
-    fontSize: "12px",
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 400,
+    color: "#7c8787",
   },
 
   headerActions: {
     display: "flex",
     alignItems: "center",
-    gap: "18px",
+    gap: 18,
   },
 
   manualsLink: {
-    height: "40px",
+    minHeight: 40,
     padding: "0 14px",
-    border: "1px solid #dfe4e4",
-    borderRadius: "9px",
+    borderRadius: 9,
+    border: "1px solid #dce5e4",
     background: "#ffffff",
-    color: "#555d5d",
+    color: "#566161",
     display: "inline-flex",
     alignItems: "center",
-    gap: "8px",
-    textDecoration: "none",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
-    fontSize: "12px",
+    justifyContent: "center",
+    gap: 8,
+    fontSize: 12,
     fontWeight: 600,
-    whiteSpace: "nowrap",
+    textDecoration: "none",
+    boxSizing: "border-box",
   },
 
   headerDivider: {
-    width: "1px",
-    height: "34px",
-    background: "#e7ebeb",
+    width: 1,
+    height: 34,
+    background: "#e3e8e8",
   },
 
   userArea: {
     display: "flex",
     alignItems: "center",
-    gap: "16px",
+    gap: 16,
   },
 
   userInfo: {
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-end",
-    gap: "3px",
+    gap: 3,
   },
 
   userEmail: {
-    fontSize: "13px",
+    maxWidth: 260,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: 13,
+    lineHeight: 1.4,
     fontWeight: 500,
+    color: "#3b4444",
   },
 
   role: {
-    color: "#00AF9A",
-    fontSize: "10px",
+    fontSize: 10,
+    lineHeight: 1.3,
     fontWeight: 700,
+    letterSpacing: "0.08em",
+    color: "#00AF9A",
   },
 
   logout: {
-    width: "42px",
-    height: "42px",
-    border:
-      "1px solid #dfe4e4",
-    borderRadius: "9px",
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    border: "1px solid #dfe5e5",
     background: "#ffffff",
-    color: "#555d5d",
+    color: "#5e6868",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -2885,144 +2959,200 @@ const styles: Record<
 
   container: {
     width: "calc(100% - 56px)",
-    maxWidth: "1260px",
+    maxWidth: 1260,
     margin: "0 auto",
-    padding: "38px 0 76px",
+    padding: "30px 0 76px",
+    boxSizing: "border-box",
   },
 
   backButton: {
-    padding: 0,
-    marginBottom: "23px",
-    border: "none",
+    border: 0,
     background: "transparent",
-    color: "#677070",
-    display: "flex",
+    color: "#687272",
+    padding: 0,
+    margin: "0 0 22px",
+    display: "inline-flex",
     alignItems: "center",
-    gap: "6px",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
-    fontSize: "13px",
+    gap: 7,
+    fontFamily: "inherit",
+    fontSize: 12,
+    fontWeight: 600,
     cursor: "pointer",
   },
 
   ticketHeader: {
+    minHeight: 112,
+    padding: "22px 24px",
+    marginBottom: 20,
+    borderRadius: 14,
+    border: "1px solid #e0e7e7",
+    background: "#ffffff",
     display: "flex",
-    alignItems: "flex-end",
-    justifyContent:
-      "space-between",
-    gap: "30px",
-    marginBottom: "24px",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 30,
+    boxSizing: "border-box",
   },
 
   ticketHeaderLeft: {
     minWidth: 0,
+    flex: 1,
   },
 
   ticketNumber: {
-    color: "#00A992",
-    fontSize: "11px",
+    marginBottom: 7,
+    fontSize: 10,
+    lineHeight: 1.3,
     fontWeight: 700,
-    letterSpacing: "0.6px",
-    marginBottom: "5px",
+    letterSpacing: "0.09em",
+    color: "#00AF9A",
   },
 
   pageTitle: {
-    margin: "0 0 8px",
-    fontSize: "28px",
+    margin: 0,
+    fontSize: 24,
+    lineHeight: 1.3,
     fontWeight: 700,
+    color: "#202828",
+    wordBreak: "break-word",
   },
 
   headerMeta: {
-    color: "#858d8d",
+    marginTop: 9,
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
-    gap: "7px",
-    fontSize: "12px",
+    gap: 7,
+    fontSize: 11,
+    lineHeight: 1.5,
+    color: "#788282",
   },
 
   metaDot: {
-    color: "#c4caca",
+    color: "#bcc4c4",
   },
 
   ticketHeaderRight: {
     display: "flex",
     alignItems: "flex-end",
-    gap: "10px",
+    gap: 12,
+    flexShrink: 0,
   },
 
   headerControl: {
     display: "flex",
     flexDirection: "column",
-    gap: "6px",
+    gap: 7,
   },
 
   controlLabel: {
-    color: "#8e9696",
-    fontSize: "11px",
+    fontSize: 10,
+    lineHeight: 1.3,
+    fontWeight: 600,
+    color: "#7a8585",
   },
 
   controlSelect: {
-    minWidth: "140px",
-    height: "40px",
-    border: "1px solid",
-    borderRadius: "8px",
-    padding: "0 10px",
+    minWidth: 135,
+    height: 40,
+    padding: "0 30px 0 11px",
+    borderRadius: 9,
+    border: "1px solid #dfe6e6",
     outline: "none",
-    fontFamily:
-      "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    fontFamily: "inherit",
+    fontSize: 11,
     fontWeight: 600,
     cursor: "pointer",
   },
-    layout: {
+
+  badge: {
+    minWidth: 112,
+    height: 40,
+    padding: "0 12px",
+    borderRadius: 9,
+    border: "1px solid",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    boxSizing: "border-box",
+    fontSize: 11,
+    fontWeight: 600,
+  },
+
+  badgeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+
+  errorMessage: {
+    width: "100%",
+    marginBottom: 20,
+    padding: "13px 15px",
+    border: "1px solid #efc1c1",
+    borderRadius: 10,
+    background: "#fff4f4",
+    color: "#b94a4a",
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    boxSizing: "border-box",
+    fontSize: 12,
+    lineHeight: 1.5,
+  },
+
+  layout: {
     display: "grid",
     gridTemplateColumns:
-      "minmax(0, 1.8fr) minmax(300px, 0.8fr)",
-    gap: "20px",
+      "minmax(0, 1fr) 340px",
+    gap: 20,
     alignItems: "start",
   },
 
   mainColumn: {
     minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 20,
   },
 
   sideColumn: {
     minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 20,
   },
 
   card: {
+    padding: 22,
+    borderRadius: 14,
+    border: "1px solid #e0e7e7",
     background: "#ffffff",
-    border: "1px solid #e5e9e9",
-    borderRadius: "14px",
-    padding: "26px",
-    marginBottom: "20px",
+    boxSizing: "border-box",
   },
 
   cardHeading: {
+    marginBottom: 22,
     display: "flex",
     alignItems: "center",
-    gap: "12px",
-    paddingBottom: "18px",
-    marginBottom: "20px",
-    borderBottom: "1px solid #edf0f0",
+    gap: 12,
   },
 
   cardHeadingCompact: {
+    marginBottom: 20,
     display: "flex",
     alignItems: "center",
-    gap: "11px",
-    paddingBottom: "17px",
-    marginBottom: "18px",
-    borderBottom: "1px solid #edf0f0",
+    gap: 12,
   },
 
   sectionIcon: {
-    width: "44px",
-    height: "44px",
-    borderRadius: "10px",
-    background: "#ecf9f7",
-    color: "#00A992",
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    background: "#e8f8f5",
+    color: "#00AF9A",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -3030,130 +3160,117 @@ const styles: Record<
   },
 
   cardTitle: {
-    margin: "0 0 3px",
-    fontSize: "16px",
+    margin: 0,
+    fontSize: 15,
+    lineHeight: 1.35,
     fontWeight: 700,
+    color: "#252d2d",
   },
 
   cardSubtitle: {
-    margin: 0,
-    color: "#8a9191",
-    fontSize: "12px",
+    margin: "4px 0 0",
+    fontSize: 11,
+    lineHeight: 1.45,
+    color: "#879090",
   },
 
   readOnlyField: {
-    marginBottom: "20px",
+    marginBottom: 18,
   },
 
   fieldLabel: {
     display: "block",
-    marginBottom: "8px",
-    color: "#444a4a",
-    fontSize: "12px",
+    marginBottom: 7,
+    fontSize: 11,
+    lineHeight: 1.4,
     fontWeight: 600,
+    color: "#5c6767",
   },
 
   readOnlyValue: {
-    color: "#303535",
-    fontSize: "14px",
-    fontWeight: 500,
+    minHeight: 42,
+    padding: "11px 13px",
+    borderRadius: 9,
+    border: "1px solid #e3e8e8",
+    background: "#f8fafa",
+    color: "#303939",
+    fontSize: 12,
+    lineHeight: 1.55,
+    boxSizing: "border-box",
   },
 
   descriptionBox: {
+    minHeight: 120,
+    padding: "14px 15px",
+    borderRadius: 9,
+    border: "1px solid #e3e8e8",
     background: "#f8fafa",
-    border: "1px solid #edf0f0",
-    borderRadius: "9px",
-    padding: "15px",
-    color: "#4f5656",
-    fontSize: "13px",
+    color: "#394242",
+    fontSize: 12,
     lineHeight: 1.7,
     whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    boxSizing: "border-box",
   },
 
   formStack: {
     display: "flex",
     flexDirection: "column",
-    gap: "15px",
+    gap: 15,
   },
 
   input: {
     width: "100%",
-    height: "44px",
-    boxSizing: "border-box",
-    border: "1px solid #d9dede",
-    borderRadius: "8px",
+    height: 42,
     padding: "0 11px",
+    borderRadius: 9,
+    border: "1px solid #dce4e4",
     background: "#ffffff",
-    color: "#303535",
-    outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "12px",
+    color: "#303939",
+    outline: "none",
+    fontFamily: "inherit",
+    fontSize: 11,
+    boxSizing: "border-box",
   },
 
   editHint: {
-    margin: "2px 0 0 0",
-    color: "#939a9a",
-    fontSize: "10px",
-    lineHeight: 1.5,
-  },
-
-  badge: {
-    minWidth: "118px",
-    height: "40px",
-    boxSizing: "border-box",
-    border: "1px solid",
-    borderRadius: "8px",
-    padding: "0 11px",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "7px",
-    fontSize: "11px",
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-  },
-
-  badgeDot: {
-    width: "6px",
-    height: "6px",
-    borderRadius: "50%",
-  },
-
-  errorMessage: {
-    borderRadius: "9px",
-    padding: "11px 14px",
-    marginBottom: "20px",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    background: "#fff1f1",
-    border: "1px solid #f0cece",
-    color: "#a63d3d",
-    fontSize: "12px",
+    margin: "2px 0 0",
+    fontSize: 10,
+    lineHeight: 1.6,
+    color: "#929b9b",
   },
 
   noFollowUps: {
-    padding: "25px 0 30px",
-    color: "#929999",
-    fontSize: "12px",
+    minHeight: 92,
+    padding: "20px",
+    borderRadius: 10,
+    background: "#f8fafa",
+    border: "1px dashed #dce4e4",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     textAlign: "center",
+    color: "#8b9494",
+    fontSize: 11,
   },
 
   timeline: {
+    position: "relative",
     display: "flex",
     flexDirection: "column",
-    gap: "20px",
-    marginBottom: "25px",
+    gap: 18,
+    marginBottom: 24,
   },
 
   timelineItem: {
     display: "flex",
     alignItems: "flex-start",
-    gap: "11px",
+    gap: 12,
   },
 
   timelineAvatar: {
-    width: "34px",
-    height: "34px",
+    width: 34,
+    height: 34,
     borderRadius: "50%",
     display: "flex",
     alignItems: "center",
@@ -3167,347 +3284,401 @@ const styles: Record<
   },
 
   timelineAvatarUser: {
-    background: "#edf1f1",
-    color: "#687171",
+    background: "#eef2f2",
+    color: "#6d7777",
+    border: "1px solid #dce3e3",
   },
 
   timelineContent: {
     flex: 1,
     minWidth: 0,
+    padding: "12px 14px",
+    borderRadius: 10,
+    border: "1px solid #e2e8e8",
+    background: "#fafcfc",
   },
 
   timelineHeader: {
+    marginBottom: 7,
     display: "flex",
+    alignItems: "center",
     justifyContent: "space-between",
-    gap: "15px",
-    marginBottom: "5px",
+    gap: 12,
   },
 
   timelineAuthor: {
-    fontSize: "12px",
+    fontSize: 11,
+    lineHeight: 1.4,
+    color: "#384141",
   },
 
   timelineDate: {
-    color: "#9aa1a1",
-    fontSize: "10px",
+    flexShrink: 0,
+    fontSize: 9,
+    lineHeight: 1.4,
+    color: "#969f9f",
   },
 
   timelineMessage: {
-    background: "#f7f9f9",
-    borderRadius: "8px",
-    padding: "11px 13px",
-    color: "#4d5454",
-    fontSize: "12px",
-    lineHeight: 1.6,
+    color: "#4a5454",
+    fontSize: 11,
+    lineHeight: 1.65,
     whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
   },
 
   followUpImages: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "8px",
-    marginTop: "9px",
+    marginTop: 10,
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fill, minmax(115px, 1fr))",
+    gap: 8,
   },
 
   followUpImageButton: {
-    width: "110px",
-    height: "82px",
+    width: "100%",
+    height: 100,
     padding: 0,
+    border: "1px solid #dce4e4",
+    borderRadius: 8,
+    background: "#ffffff",
     overflow: "hidden",
-    border: "1px solid #e1e6e6",
-    borderRadius: "8px",
-    background: "#f5f7f7",
     cursor: "pointer",
   },
 
   followUpImage: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
     display: "block",
+    objectFit: "cover",
   },
 
   followUpComposer: {
-    paddingTop: "20px",
-    borderTop: "1px solid #edf0f0",
+    paddingTop: 22,
+    borderTop: "1px solid #e7ebeb",
   },
 
   textarea: {
     width: "100%",
-    minHeight: "105px",
+    minHeight: 115,
     resize: "vertical",
-    boxSizing: "border-box",
-    border: "1px solid #d9dede",
-    borderRadius: "8px",
-    padding: "12px",
-    outlineColor: "#00AF9A",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "12px",
+    padding: "12px 13px",
+    borderRadius: 9,
+    border: "1px solid #dce4e4",
+    background: "#ffffff",
+    color: "#303939",
+    outline: "none",
+    fontFamily: "inherit",
+    fontSize: 11,
     lineHeight: 1.6,
+    boxSizing: "border-box",
   },
 
   previewGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "8px",
-    marginTop: "10px",
+    marginTop: 12,
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fill, minmax(100px, 1fr))",
+    gap: 9,
   },
 
   previewItem: {
-    width: "90px",
-    height: "70px",
     position: "relative",
-    borderRadius: "8px",
+    height: 90,
+    borderRadius: 8,
     overflow: "hidden",
-    border: "1px solid #e1e6e6",
+    border: "1px solid #dce4e4",
+    background: "#f5f7f7",
   },
 
   previewImage: {
     width: "100%",
     height: "100%",
     objectFit: "cover",
+    display: "block",
   },
 
   removeImage: {
     position: "absolute",
-    top: "4px",
-    right: "4px",
-    width: "21px",
-    height: "21px",
+    top: 5,
+    right: 5,
+    width: 23,
+    height: 23,
     padding: 0,
-    border: "none",
+    border: 0,
     borderRadius: "50%",
-    background: "rgba(0,0,0,0.65)",
+    background: "rgba(31,39,39,.82)",
     color: "#ffffff",
+    fontFamily: "Arial, sans-serif",
+    fontSize: 16,
+    lineHeight: "23px",
+    textAlign: "center",
     cursor: "pointer",
   },
 
   composerFooter: {
+    marginTop: 12,
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    gap: "15px",
-    marginTop: "11px",
+    justifyContent: "space-between",
+    gap: 16,
   },
 
   composerLeft: {
     display: "flex",
     alignItems: "center",
-    gap: "10px",
     flexWrap: "wrap",
+    gap: 10,
   },
 
   attachButton: {
-    height: "40px",
-    padding: "0 13px",
-    border: "1px solid #d7dddd",
-    borderRadius: "8px",
+    minHeight: 38,
+    padding: "0 12px",
+    borderRadius: 8,
+    border: "1px solid #dce4e4",
     background: "#ffffff",
-    color: "#566060",
+    color: "#596363",
     display: "inline-flex",
     alignItems: "center",
-    gap: "7px",
-    fontSize: "11px",
+    justifyContent: "center",
+    gap: 7,
+    boxSizing: "border-box",
+    fontSize: 10,
     fontWeight: 600,
     cursor: "pointer",
   },
 
   composerHint: {
-    color: "#969d9d",
-    fontSize: "10px",
+    fontSize: 9,
+    lineHeight: 1.4,
+    color: "#9aa2a2",
   },
 
   saveRight: {
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: "11px",
-    flexWrap: "wrap",
+    gap: 12,
+  },
+
+  savedMessage: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    color: "#16806c",
+    fontSize: 10,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
   },
 
   saveButton: {
-    height: "44px",
-    padding: "0 17px",
-    border: "none",
-    borderRadius: "8px",
+    minHeight: 42,
+    padding: "0 16px",
+    border: 0,
+    borderRadius: 9,
     background: "#00AF9A",
     color: "#ffffff",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "7px",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    gap: 8,
+    fontFamily: "inherit",
+    fontSize: 11,
     fontWeight: 600,
-  },
-
-  savedMessage: {
-    color: "#13806c",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "5px",
-    fontSize: "11px",
-    fontWeight: 600,
+    boxSizing: "border-box",
   },
 
   tagsContainer: {
     display: "flex",
     flexWrap: "wrap",
-    gap: "7px",
+    gap: 7,
   },
 
   tag: {
-    minHeight: "28px",
-    boxSizing: "border-box",
-    border: "1px solid",
-    borderRadius: "20px",
+    minHeight: 30,
     padding: "0 9px",
+    borderRadius: 7,
+    border: "1px solid",
+    background: "#ffffff",
     display: "inline-flex",
     alignItems: "center",
-    gap: "6px",
-    fontSize: "10px",
-    fontWeight: 600,
+    gap: 6,
+    boxSizing: "border-box",
+    fontSize: 9,
+    lineHeight: 1.3,
+    fontWeight: 700,
+    letterSpacing: "0.02em",
   },
 
   tagDot: {
-    width: "6px",
-    height: "6px",
+    width: 6,
+    height: 6,
     borderRadius: "50%",
+    flexShrink: 0,
   },
 
   removeTag: {
+    width: 17,
+    height: 17,
+    marginLeft: 2,
     padding: 0,
-    marginLeft: "2px",
-    border: "none",
+    border: 0,
+    borderRadius: "50%",
     background: "transparent",
     color: "currentColor",
-    fontSize: "14px",
+    fontFamily: "Arial, sans-serif",
+    fontSize: 14,
+    lineHeight: "17px",
     cursor: "pointer",
   },
 
   noTags: {
     margin: 0,
-    color: "#929999",
-    fontSize: "11px",
+    fontSize: 11,
+    lineHeight: 1.5,
+    color: "#909999",
   },
 
   tagDivider: {
-    height: "1px",
-    background: "#edf0f0",
+    width: "100%",
+    height: 1,
     margin: "18px 0",
+    background: "#e8ecec",
   },
 
   newTagArea: {
-    marginTop: "18px",
+    marginTop: 15,
   },
 
   colorRow: {
-    display: "grid",
-    gridTemplateColumns: "46px 1fr",
-    gap: "8px",
-    marginTop: "8px",
+    marginTop: 9,
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
   },
 
   colorInput: {
-    width: "46px",
-    height: "38px",
-    padding: "3px",
-    border: "1px solid #d9dede",
-    borderRadius: "8px",
+    width: 42,
+    height: 38,
+    padding: 3,
+    border: "1px solid #dce4e4",
+    borderRadius: 8,
     background: "#ffffff",
     cursor: "pointer",
+    boxSizing: "border-box",
   },
 
   createTagButton: {
-    height: "38px",
-    border: "1px solid #00AF9A",
-    borderRadius: "8px",
-    background: "#ffffff",
-    color: "#008f7e",
-    fontFamily: "'Poppins', Arial, sans-serif",
-    fontSize: "11px",
+    flex: 1,
+    minHeight: 38,
+    padding: "0 11px",
+    borderRadius: 8,
+    border: "1px solid #cfe4e0",
+    background: "#eff9f7",
+    color: "#008c7b",
+    fontFamily: "inherit",
+    fontSize: 10,
     fontWeight: 600,
     cursor: "pointer",
   },
 
   infoCard: {
+    padding: "8px 18px",
+    borderRadius: 14,
+    border: "1px solid #e0e7e7",
     background: "#ffffff",
-    border: "1px solid #e5e9e9",
-    borderRadius: "14px",
-    padding: "18px 20px",
+    boxSizing: "border-box",
   },
 
   infoRow: {
+    minHeight: 48,
+    borderBottom: "1px solid #edf0f0",
     display: "flex",
+    alignItems: "center",
     justifyContent: "space-between",
-    gap: "15px",
-    padding: "9px 0",
-    borderBottom: "1px solid #f0f2f2",
-    color: "#858d8d",
-    fontSize: "10px",
+    gap: 12,
+    fontSize: 10,
+    lineHeight: 1.4,
+    color: "#858e8e",
   },
 
   imageModal: {
     position: "fixed",
     inset: 0,
     zIndex: 9999,
-    background: "rgba(16,20,20,0.82)",
+    padding: 35,
+    background: "rgba(20,26,26,.88)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "40px",
+    boxSizing: "border-box",
   },
 
   modalImage: {
     maxWidth: "92vw",
     maxHeight: "88vh",
     objectFit: "contain",
-    borderRadius: "10px",
-    background: "#ffffff",
+    borderRadius: 8,
+    boxShadow:
+      "0 18px 60px rgba(0,0,0,.35)",
   },
 
   modalClose: {
     position: "fixed",
-    top: "22px",
-    right: "28px",
-    width: "38px",
-    height: "38px",
-    border: "1px solid rgba(255,255,255,0.3)",
+    top: 22,
+    right: 26,
+    width: 42,
+    height: 42,
+    padding: 0,
+    border: "1px solid rgba(255,255,255,.25)",
     borderRadius: "50%",
-    background: "rgba(0,0,0,0.25)",
+    background: "rgba(255,255,255,.1)",
     color: "#ffffff",
-    fontSize: "24px",
+    fontFamily: "Arial, sans-serif",
+    fontSize: 27,
+    lineHeight: "40px",
+    textAlign: "center",
     cursor: "pointer",
   },
 
   notFound: {
-    minHeight: "400px",
+    minHeight: 340,
+    padding: 30,
+    borderRadius: 14,
+    border: "1px solid #e0e7e7",
+    background: "#ffffff",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
+    boxSizing: "border-box",
   },
 
   notFoundIcon: {
-    width: "58px",
-    height: "58px",
-    borderRadius: "14px",
-    background: "#ecf9f7",
+    width: 58,
+    height: 58,
+    marginBottom: 15,
+    borderRadius: 15,
+    background: "#e8f8f5",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: "15px",
   },
 
   notFoundTitle: {
-    margin: "0 0 7px",
-    fontSize: "18px",
+    margin: 0,
+    fontSize: 16,
+    lineHeight: 1.4,
+    fontWeight: 700,
+    color: "#303838",
   },
 
   notFoundText: {
-    margin: 0,
-    color: "#8a9191",
-    fontSize: "12px",
+    maxWidth: 420,
+    margin: "7px 0 0",
+    fontSize: 11,
+    lineHeight: 1.6,
+    color: "#858e8e",
   },
 };
