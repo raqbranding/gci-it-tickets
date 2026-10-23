@@ -124,7 +124,8 @@ export default function TicketPage() {
     }
   }, [ticketId]);
 
-  async function cerrarSesion() {
+
+async function cerrarSesion() {
   setCerrandoSesion(true);
 
   await new Promise<void>((resolve) => {
@@ -143,9 +144,15 @@ export default function TicketPage() {
       return;
     }
 
-    window.location.replace(
-      "https://apps-test.globalcoffeeindustries.com/login"
-    );
+    const esPruebas =
+      window.location.hostname ===
+      "helpdesk-test.globalcoffeeindustries.com";
+
+    const portal = esPruebas
+      ? "https://apps-test.globalcoffeeindustries.com"
+      : "https://apps.globalcoffeeindustries.com";
+
+    window.location.replace(`${portal}/login`);
   } catch (error) {
     console.error("Error al cerrar sesión:", error);
     setError("No se ha podido cerrar sesión. Inténtalo de nuevo.");
@@ -162,13 +169,24 @@ export default function TicketPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
-   if (!user) {
+
+if (!user) {
+  const esPruebas =
+    window.location.hostname ===
+    "helpdesk-test.globalcoffeeindustries.com";
+
+  const portal = esPruebas
+    ? "https://apps-test.globalcoffeeindustries.com"
+    : "https://apps.globalcoffeeindustries.com";
+
   window.location.replace(
-    "https://apps-test.globalcoffeeindustries.com/login?next=" +
+    `${portal}/login?next=` +
       encodeURIComponent(window.location.href)
   );
+
   return;
 }
+
 
     const { data: acceso, error: accesoError } =
       await supabase
