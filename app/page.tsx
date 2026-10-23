@@ -65,15 +65,24 @@ const [rol, setRol] = useState<Rol | null>(null);
   data: { user },
 } = await supabase.auth.getUser();
 
+
 if (!user) {
+  const esPruebas =
+    window.location.hostname ===
+    "helpdesk-test.globalcoffeeindustries.com";
+
+  const portal = esPruebas
+    ? "https://apps-test.globalcoffeeindustries.com"
+    : "https://apps.globalcoffeeindustries.com";
+
   window.location.replace(
-    "https://apps-test.globalcoffeeindustries.com/login?next=" +
-      encodeURIComponent(
-        "https://helpdesk-test.globalcoffeeindustries.com"
-      )
+    `${portal}/login?next=` +
+      encodeURIComponent(window.location.href)
   );
+
   return;
 }
+
 
 const { data: acceso, error: accesoError } = await supabase
   .from("it_usuarios")
@@ -273,12 +282,24 @@ const rolActual = acceso.rol as Rol;
         data: { user },
       } = await supabase.auth.getUser();
 
-   if (!user) {
+
+if (!user) {
+  const esPruebas =
+    window.location.hostname ===
+    "helpdesk-test.globalcoffeeindustries.com";
+
+  const portal = esPruebas
+    ? "https://apps-test.globalcoffeeindustries.com"
+    : "https://apps.globalcoffeeindustries.com";
+
   window.location.replace(
-    "https://apps-test.globalcoffeeindustries.com/login"
+    `${portal}/login?next=` +
+      encodeURIComponent(window.location.href)
   );
+
   return;
 }
+
 
       const ahora = new Date().toISOString();
 
@@ -440,7 +461,8 @@ const rolActual = acceso.rol as Rol;
     setOrden("RECIENTES");
   }
 
- async function cerrarSesion() {
+
+async function cerrarSesion() {
   setCerrandoSesion(true);
 
   await new Promise<void>((resolve) => {
@@ -454,20 +476,31 @@ const rolActual = acceso.rol as Rol;
 
     if (error) {
       console.error("Error al cerrar sesión:", error);
-      setErrorCarga("No se ha podido cerrar sesión. Inténtalo de nuevo.");
+      setErrorCarga(
+        "No se ha podido cerrar sesión. Inténtalo de nuevo."
+      );
       setCerrandoSesion(false);
       return;
     }
 
-    window.location.replace(
-      "https://apps-test.globalcoffeeindustries.com/login"
-    );
+    const esPruebas =
+      window.location.hostname ===
+      "helpdesk-test.globalcoffeeindustries.com";
+
+    const portal = esPruebas
+      ? "https://apps-test.globalcoffeeindustries.com"
+      : "https://apps.globalcoffeeindustries.com";
+
+    window.location.replace(`${portal}/login`);
   } catch (error) {
     console.error("Error al cerrar sesión:", error);
-    setErrorCarga("No se ha podido cerrar sesión. Inténtalo de nuevo.");
+    setErrorCarga(
+      "No se ha podido cerrar sesión. Inténtalo de nuevo."
+    );
     setCerrandoSesion(false);
   }
 }
+
 
   /* =========================================================
      LOADING
