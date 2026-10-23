@@ -21,8 +21,9 @@ type Importancia =
 export default function NuevoTicketPage() {
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [guardando, setGuardando] = useState(false);
+ const [loading, setLoading] = useState(true);
+const [cerrandoSesion, setCerrandoSesion] = useState(false);
+const [guardando, setGuardando] = useState(false);
 
   const [rol, setRol] =
     useState<Rol | null>(null);
@@ -68,44 +69,45 @@ export default function NuevoTicketPage() {
      CARGAR USUARIO
   ========================================================= */
 
-  async function cargarUsuario() {
-    setLoading(true);
+async function cargarUsuario() {
+  setLoading(true);
+  setError("");
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
-
-    const {
-      data: acceso,
-      error: accesoError,
-    } = await supabase
-      .from("it_usuarios")
-      .select("rol, activo")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (
-      accesoError ||
-      !acceso ||
-      !acceso.activo
-    ) {
-      await supabase.auth.signOut();
-      router.replace("/login");
-      return;
-    }
-
-    setUserId(user.id);
-    setUserEmail(user.email ?? "");
-    setEmail(user.email ?? "");
-    setRol(acceso.rol as Rol);
-
-    setLoading(false);
+  if (!user) {
+    window.location.replace(
+      "https://apps-test.globalcoffeeindustries.com/login?next=" +
+        encodeURIComponent(
+          "https://helpdesk-test.globalcoffeeindustries.com/nuevo-ticket"
+        )
+    );
+    return;
   }
+
+  const { data: acceso, error: accesoError } = await supabase
+    .from("it_usuarios")
+    .select("rol, activo")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (accesoError || !acceso || !acceso.activo) {
+    setError(
+      "No tienes permisos para acceder a Tickets IT. Contacta con el administrador."
+    );
+    setLoading(false);
+    return;
+  }
+
+  setUserId(user.id);
+  setUserEmail(user.email ?? "");
+  setEmail(user.email ?? "");
+  setRol(acceso.rol as Rol);
+
+  setLoading(false);
+}
 
   /* =========================================================
      IMÁGENES
@@ -464,30 +466,54 @@ export default function NuevoTicketPage() {
      LOGOUT
   ========================================================= */
 
-  async function cerrarSesion() {
-    await supabase.auth.signOut();
-    router.replace("/login");
+ async function cerrarSesion() {
+  setCerrandoSesion(true);
+
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+
+  try {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error("Error al cerrar sesión:", error);
+      setError("No se ha podido cerrar sesión. Inténtalo de nuevo.");
+      setCerrandoSesion(false);
+      return;
+    }
+
+    window.location.replace(
+      "https://apps-test.globalcoffeeindustries.com/login"
+    );
+  } catch (error) {
+    console.error("Error al cerrar sesión:", error);
+    setError("No se ha podido cerrar sesión. Inténtalo de nuevo.");
+    setCerrandoSesion(false);
   }
+}
 
   /* =========================================================
      LOADING
   ========================================================= */
 
-  if (loading) {
-    return (
-      <main style={styles.loading}>
-        <div
-          style={styles.loadingIcon}
-        >
-          <SupportIcon />
-        </div>
+  if (loading || cerrandoSesion) {
+  return (
+    <main style={styles.loading}>
+      <div style={styles.loadingIcon}>
+        <SupportIcon color="#00AF9A" />
+      </div>
 
-        <span>
-          Cargando...
-        </span>
-      </main>
-    );
-  }
+      <span>
+        {cerrandoSesion
+          ? "Cerrando Tickets IT..."
+          : "Accediendo a Tickets IT..."}
+      </span>
+    </main>
+  );
+}
 
   /* =========================================================
      PÁGINA
