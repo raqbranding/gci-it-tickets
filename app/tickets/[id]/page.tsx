@@ -72,6 +72,7 @@ export default function TicketPage() {
 
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
 
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -123,6 +124,35 @@ export default function TicketPage() {
     }
   }, [ticketId]);
 
+  async function cerrarSesion() {
+  setCerrandoSesion(true);
+
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+
+  try {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error("Error al cerrar sesión:", error);
+      setError("No se ha podido cerrar sesión. Inténtalo de nuevo.");
+      setCerrandoSesion(false);
+      return;
+    }
+
+    window.location.replace(
+      "https://apps-test.globalcoffeeindustries.com/login"
+    );
+  } catch (error) {
+    console.error("Error al cerrar sesión:", error);
+    setError("No se ha podido cerrar sesión. Inténtalo de nuevo.");
+    setCerrandoSesion(false);
+  }
+}
+  
   async function cargarPagina() {
     setLoading(true);
     setError("");
@@ -132,10 +162,13 @@ export default function TicketPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
+   if (!user) {
+  window.location.replace(
+    "https://apps-test.globalcoffeeindustries.com/login?next=" +
+      encodeURIComponent(window.location.href)
+  );
+  return;
+}
 
     const { data: acceso, error: accesoError } =
       await supabase
@@ -144,11 +177,13 @@ export default function TicketPage() {
         .eq("user_id", user.id)
         .maybeSingle();
 
-    if (accesoError || !acceso || !acceso.activo) {
-      await supabase.auth.signOut();
-      router.replace("/login");
-      return;
-    }
+   if (accesoError || !acceso || !acceso.activo) {
+  setError(
+    "No tienes permisos para acceder a Tickets IT. Contacta con el administrador."
+  );
+  setLoading(false);
+  return;
+}
 
     const rolUsuario = acceso.rol as Rol;
 
@@ -1089,44 +1124,39 @@ export default function TicketPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <main style={styles.loading}>
-        <div style={styles.loadingIcon}>
-          <SupportIcon
-            color="#00AF9A"
-          />
-        </div>
+if (loading || cerrandoSesion) {
+  return (
+    <main style={styles.loading}>
+      <div style={styles.loadingIcon}>
+        <SupportIcon color="#00AF9A" />
+      </div>
 
-        <p style={styles.loadingText}>
-          Cargando ticket...
-        </p>
-      </main>
-    );
-  }
+      <p style={styles.loadingText}>
+        {cerrandoSesion
+          ? "Cerrando Tickets IT..."
+          : "Accediendo a Tickets IT..."}
+      </p>
+    </main>
+  );
+}
 
-  if (!ticket) {
-    return (
-      <main style={styles.page}>
-        <Header
-          email={userEmail}
-          rol={rol}
-          onLogout={async () => {
-            await supabase.auth.signOut();
-            router.replace("/login");
-          }}
-        />
+if (!ticket) {
+  return (
+    <main style={styles.page}>
+      <Header
+        email={userEmail}
+        rol={rol}
+        onLogout={cerrarSesion}
+      />
 
-        <div style={styles.container}>
-          <button
-            onClick={() =>
-              router.push("/")
-            }
-            style={styles.backButton}
-          >
-            <ArrowLeftIcon />
-            Volver
-          </button>
+      <div style={styles.container}>
+        <button
+          onClick={() => router.push("/")}
+          style={styles.backButton}
+        >
+          <ArrowLeftIcon />
+          Volver
+        </button>
 
           <div style={styles.notFound}>
             <div
@@ -1161,26 +1191,23 @@ export default function TicketPage() {
   }
 
   return (
-    <main style={styles.page}>
-      <Header
-        email={userEmail}
-        rol={rol}
-        onLogout={async () => {
-          await supabase.auth.signOut();
-          router.replace("/login");
-        }}
-      />
+  <main style={styles.page}>
+    <Header
+      email={userEmail}
+      rol={rol}
+      onLogout={cerrarSesion}
+    />
 
-      <div style={styles.container}>
-        <button
-          onClick={() =>
-            router.push("/")
-          }
-          style={styles.backButton}
-        >
-          <ArrowLeftIcon />
-          Volver a tickets
-        </button>
+    <div style={styles.container}>
+      <button
+        onClick={() =>
+          router.push("/")
+        }
+        style={styles.backButton}
+      >
+        <ArrowLeftIcon />
+        Volver a tickets
+      </button>
 
         <section
           style={styles.ticketHeader}
