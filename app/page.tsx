@@ -33,7 +33,8 @@ export default function HomePage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [rol, setRol] = useState<Rol | null>(null);
+const [cerrandoSesion, setCerrandoSesion] = useState(false);
+const [rol, setRol] = useState<Rol | null>(null);
   const [email, setEmail] = useState("");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [errorCarga, setErrorCarga] = useState("");
@@ -61,27 +62,43 @@ export default function HomePage() {
     setErrorCarga("");
 
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  data: { user },
+} = await supabase.auth.getUser();
 
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
 
-    const { data: acceso, error: accesoError } = await supabase
-      .from("it_usuarios")
-      .select("rol, activo")
-      .eq("user_id", user.id)
-      .maybeSingle();
+if (!user) {
+  const esPruebas =
+    window.location.hostname ===
+    "helpdesk-test.globalcoffeeindustries.com";
 
-    if (accesoError || !acceso || !acceso.activo) {
-      await supabase.auth.signOut();
-      router.replace("/login");
-      return;
-    }
+  const portal = esPruebas
+    ? "https://apps-test.globalcoffeeindustries.com"
+    : "https://apps.globalcoffeeindustries.com";
 
-    const rolActual = acceso.rol as Rol;
+  window.location.replace(
+    `${portal}/login?next=` +
+      encodeURIComponent(window.location.href)
+  );
+
+  return;
+}
+
+
+const { data: acceso, error: accesoError } = await supabase
+  .from("it_usuarios")
+  .select("rol, activo")
+  .eq("user_id", user.id)
+  .maybeSingle();
+
+if (accesoError || !acceso || !acceso.activo) {
+  setErrorCarga(
+    "No tienes permisos para acceder a Tickets IT. Contacta con el administrador."
+  );
+  setLoading(false);
+  return;
+}
+
+const rolActual = acceso.rol as Rol;
 
     setRol(rolActual);
     setEmail(user.email ?? "");
@@ -265,10 +282,24 @@ export default function HomePage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
+
+if (!user) {
+  const esPruebas =
+    window.location.hostname ===
+    "helpdesk-test.globalcoffeeindustries.com";
+
+  const portal = esPruebas
+    ? "https://apps-test.globalcoffeeindustries.com"
+    : "https://apps.globalcoffeeindustries.com";
+
+  window.location.replace(
+    `${portal}/login?next=` +
+      encodeURIComponent(window.location.href)
+  );
+
+  return;
+}
+
 
       const ahora = new Date().toISOString();
 
@@ -430,26 +461,66 @@ export default function HomePage() {
     setOrden("RECIENTES");
   }
 
-  async function cerrarSesion() {
-    await supabase.auth.signOut();
-    router.replace("/login");
+
+async function cerrarSesion() {
+  setCerrandoSesion(true);
+
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+
+  try {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error("Error al cerrar sesión:", error);
+      setErrorCarga(
+        "No se ha podido cerrar sesión. Inténtalo de nuevo."
+      );
+      setCerrandoSesion(false);
+      return;
+    }
+
+    const esPruebas =
+      window.location.hostname ===
+      "helpdesk-test.globalcoffeeindustries.com";
+
+    const portal = esPruebas
+      ? "https://apps-test.globalcoffeeindustries.com"
+      : "https://apps.globalcoffeeindustries.com";
+
+    window.location.replace(`${portal}/login`);
+  } catch (error) {
+    console.error("Error al cerrar sesión:", error);
+    setErrorCarga(
+      "No se ha podido cerrar sesión. Inténtalo de nuevo."
+    );
+    setCerrandoSesion(false);
   }
+}
+
 
   /* =========================================================
      LOADING
   ========================================================= */
 
-  if (loading) {
-    return (
-      <main style={styles.loading}>
-        <div style={styles.loadingIcon}>
-          <SupportIcon color="#00AF9A" />
-        </div>
+if (loading || cerrandoSesion) {
+  return (
+    <main style={styles.loading}>
+      <div style={styles.loadingIcon}>
+        <SupportIcon color="#00AF9A" />
+      </div>
 
-        <span>Cargando tickets...</span>
-      </main>
-    );
-  }
+      <span>
+        {cerrandoSesion
+          ? "Cerrando Tickets IT..."
+          : "Accediendo a Tickets IT..."}
+      </span>
+    </main>
+  );
+}
 
   /* =========================================================
      PÁGINA
